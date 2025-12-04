@@ -1,0 +1,42 @@
+---
+name: "Savings Tracker"
+version: "1.0.0"
+slug: "savings-tracker"
+description: "A web-based savings tracker for monitoring your savings goals"
+url: "https://github.com/your-repo/savings-tracker"
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: application
+boot: auto
+ports:
+  3001/tcp: 3001
+ports_description:
+  3001/tcp: "Web interface (HTTP)"
+webui: "http://[HOST]:[PORT:3001]/savings/"
+ingress: true
+ingress_port: 0
+panel_icon: "mdi:cash-multiple"
+panel_title: "Savings Tracker"
+panel_admin: false
+homeassistant_api: false
+hassio_api: false
+auth_api: false
+host_network: false
+privileged: []
+devices: []
+tmpfs: false
+full_access: false
+apparmor: false
+map:
+  - config:rw
+  - ssl:rw
+  - addons:rw
+  - share:rw
+  - backup:rw
+options: {}
+schema: {}
+image: "your-registry/savings-tracker-{arch}"
