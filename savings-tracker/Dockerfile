@@ -1,3 +1,4 @@
+ARG BUILD_FROM
 # --- Build Stage ---
 # Use a Node.js image to build the frontend and install backend dependencies
 FROM node:18-alpine AS builder
@@ -17,7 +18,6 @@ RUN cd backend && npm install --only=production
 
 # --- Final Stage ---
 # Use the Home Assistant base image provided by the build environment
-ARG BUILD_FROM
 FROM $BUILD_FROM
 
 # Install Nginx (to serve the frontend) and Node.js (to run the backend)
