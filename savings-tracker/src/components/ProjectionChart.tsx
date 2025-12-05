@@ -97,31 +97,51 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
     };
   }) || [];
 
+  // Responsive settings
+  const isMobile = window.innerWidth < 600;
+  const chartHeight = isMobile ? 280 : 400;
+  const chartMargins = isMobile 
+    ? { top: 10, right: 10, left: -10, bottom: 5 }
+    : { top: 10, right: 30, left: 10, bottom: 5 };
+
   return (
-    <div className="projection-chart">
-      <ResponsiveContainer width="100%" height={400}>
-        <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="date" />
+    <div className="projection-chart" style={{ width: '100%', overflowX: 'hidden' }}>
+      <ResponsiveContainer width="100%" height={chartHeight}>
+        <LineChart data={chartData} margin={chartMargins}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis 
+            dataKey="date" 
+            tick={{ fontSize: isMobile ? 10 : 12 }}
+            tickMargin={8}
+            interval={isMobile ? 2 : 1}
+          />
           <YAxis 
             tickFormatter={(value) => `£${(value / 1000).toFixed(0)}k`}
+            tick={{ fontSize: isMobile ? 10 : 12 }}
+            width={isMobile ? 45 : 60}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Legend />
+          <Legend 
+            wrapperStyle={{ 
+              fontSize: isMobile ? '12px' : '14px',
+              paddingTop: '10px'
+            }}
+          />
           <Line
             type="monotone"
             dataKey="total"
             name="Total Combined Savings"
             stroke="#667eea"
-            strokeWidth={3}
+            strokeWidth={isMobile ? 2 : 3}
             dot={(props: any) => {
               const { cx, cy, payload } = props;
+              const dotRadius = isMobile ? 3 : 4;
               if (!payload.isProjected) {
-                return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={4} fill="#667eea" stroke="#667eea" />;
+                return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={dotRadius} fill="#667eea" stroke="#667eea" />;
               }
-              return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={4} fill="#667eea" stroke="#667eea" strokeDasharray="2 2" opacity={0.6} />;
+              return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={dotRadius} fill="#667eea" stroke="#667eea" strokeDasharray="2 2" opacity={0.6} />;
             }}
-            activeDot={{ r: 6 }}
+            activeDot={{ r: isMobile ? 5 : 6 }}
           />
         </LineChart>
       </ResponsiveContainer>
