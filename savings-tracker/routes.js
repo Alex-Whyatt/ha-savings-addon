@@ -1,0 +1,271 @@
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const { runQuery, getRow, getAllRows } = require('./database');
+
+const router = express.Router();
+
+// Get all savings data
+router.get('/data', async (req, res) => {
+  try {
+    const pots = await getAllRows('SELECT * FROM savings_pots ORDER BY created_at DESC');
+    const transactions = await getAllRows('SELECT * FROM transactions ORDER BY date DESC');
+
+    // Convert date strings back to Date objects for consistency
+    const formattedPots = pots.map(pot => ({
+      ...pot,
+      createdAt: new Date(pot.created_at),
+      updatedAt: new Date(pot.updated_at)
+    }));
+
+    const formattedTransactions = transactions.map(transaction => ({
+      ...transaction,
+      date: new Date(transaction.date),
+      repeatMonthly: transaction.repeat_monthly === 1,
+      createdAt: new Date(transaction.created_at)
+    }));
+
+    res.json({
+      pots: formattedPots,
+      transactions: formattedTransactions
+    });
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Savings Pots Routes
+router.get('/pots', async (req, res) => {
+  try {
+    const pots = await getAllRows('SELECT * FROM savings_pots ORDER BY created_at DESC');
+    const formattedPots = pots.map(pot => ({
+      ...pot,
+      createdAt: new Date(pot.created_at),
+      updatedAt: new Date(pot.updated_at)
+    }));
+    res.json(formattedPots);
+  } catch (error) {
+    console.error('Error fetching pots:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/pots', async (req, res) => {
+  try {
+    const { name, description, currentTotal, targetAmount, color } = req.body;
+
+    if (!name || typeof currentTotal !== 'number' || !color) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    await runQuery(
+      'INSERT INTO savings_pots (id, name, description, current_total, target_amount, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, name, description || null, currentTotal, targetAmount || null, color, now, now]
+    );
+
+    const pot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [id]);
+    const formattedPot = {
+      ...pot,
+      createdAt: new Date(pot.created_at),
+      updatedAt: new Date(pot.updated_at)
+    };
+
+    res.status(201).json(formattedPot);
+  } catch (error) {
+    console.error('Error creating pot:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/pots/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, currentTotal, targetAmount, color } = req.body;
+
+    const existingPot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [id]);
+    if (!existingPot) {
+      return res.status(404).json({ error: 'Pot not found' });
+    }
+
+    const now = new Date().toISOString();
+
+    await runQuery(
+      'UPDATE savings_pots SET name = ?, description = ?, current_total = ?, target_amount = ?, color = ?, updated_at = ? WHERE id = ?',
+      [name || existingPot.name, description !== undefined ? description : existingPot.description, currentTotal !== undefined ? currentTotal : existingPot.current_total, targetAmount !== undefined ? targetAmount : existingPot.target_amount, color || existingPot.color, now, id]
+    );
+
+    const updatedPot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [id]);
+    const formattedPot = {
+      ...updatedPot,
+      createdAt: new Date(updatedPot.created_at),
+      updatedAt: new Date(updatedPot.updated_at)
+    };
+
+    res.json(formattedPot);
+  } catch (error) {
+    console.error('Error updating pot:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/pots/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if pot exists
+    const pot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [id]);
+    if (!pot) {
+      return res.status(404).json({ error: 'Pot not found' });
+    }
+
+    // Delete transactions first (due to foreign key constraint)
+    await runQuery('DELETE FROM transactions WHERE pot_id = ?', [id]);
+
+    // Delete the pot
+    await runQuery('DELETE FROM savings_pots WHERE id = ?', [id]);
+
+    res.json({ message: 'Pot deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting pot:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Transactions Routes
+router.get('/transactions', async (req, res) => {
+  try {
+    const transactions = await getAllRows('SELECT * FROM transactions ORDER BY date DESC');
+    const formattedTransactions = transactions.map(transaction => ({
+      ...transaction,
+      date: new Date(transaction.date),
+      repeatMonthly: transaction.repeat_monthly === 1,
+      createdAt: new Date(transaction.created_at)
+    }));
+    res.json(formattedTransactions);
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/transactions', async (req, res) => {
+  try {
+    const { potId, amount, date, description, repeatMonthly } = req.body;
+
+    if (!potId || typeof amount !== 'number' || !date) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Verify pot exists
+    const pot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [potId]);
+    if (!pot) {
+      return res.status(404).json({ error: 'Pot not found' });
+    }
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const transactionDate = new Date(date).toISOString();
+
+    // Insert transaction
+    await runQuery(
+      'INSERT INTO transactions (id, pot_id, amount, date, description, repeat_monthly, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, potId, amount, transactionDate, description || null, repeatMonthly ? 1 : 0, now]
+    );
+
+    // Update pot total
+    await runQuery(
+      'UPDATE savings_pots SET current_total = current_total + ?, updated_at = ? WHERE id = ?',
+      [amount, now, potId]
+    );
+
+    const transaction = await getRow('SELECT * FROM transactions WHERE id = ?', [id]);
+    const formattedTransaction = {
+      ...transaction,
+      date: new Date(transaction.date),
+      repeatMonthly: transaction.repeat_monthly === 1,
+      createdAt: new Date(transaction.created_at)
+    };
+
+    res.status(201).json(formattedTransaction);
+  } catch (error) {
+    console.error('Error creating transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/transactions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { potId, amount, date, description, repeatMonthly } = req.body;
+
+    const existingTransaction = await getRow('SELECT * FROM transactions WHERE id = ?', [id]);
+    if (!existingTransaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const now = new Date().toISOString();
+    const transactionDate = date ? new Date(date).toISOString() : existingTransaction.date;
+
+    // Calculate the difference in amount
+    const amountDiff = (amount !== undefined ? amount : existingTransaction.amount) - existingTransaction.amount;
+
+    // Update transaction
+    await runQuery(
+      'UPDATE transactions SET pot_id = ?, amount = ?, date = ?, description = ?, repeat_monthly = ? WHERE id = ?',
+      [potId || existingTransaction.pot_id, amount !== undefined ? amount : existingTransaction.amount, transactionDate, description !== undefined ? description : existingTransaction.description, repeatMonthly !== undefined ? (repeatMonthly ? 1 : 0) : existingTransaction.repeat_monthly, id]
+    );
+
+    // Update pot total if amount changed
+    if (amountDiff !== 0) {
+      await runQuery(
+        'UPDATE savings_pots SET current_total = current_total + ?, updated_at = ? WHERE id = ?',
+        [amountDiff, now, existingTransaction.pot_id]
+      );
+    }
+
+    // If pot changed, we need to handle that too (more complex logic needed)
+
+    const updatedTransaction = await getRow('SELECT * FROM transactions WHERE id = ?', [id]);
+    const formattedTransaction = {
+      ...updatedTransaction,
+      date: new Date(updatedTransaction.date),
+      repeatMonthly: updatedTransaction.repeat_monthly === 1,
+      createdAt: new Date(updatedTransaction.created_at)
+    };
+
+    res.json(formattedTransaction);
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/transactions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const transaction = await getRow('SELECT * FROM transactions WHERE id = ?', [id]);
+    if (!transaction) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    // Update pot total (subtract the transaction amount)
+    await runQuery(
+      'UPDATE savings_pots SET current_total = current_total - ?, updated_at = ? WHERE id = ?',
+      [transaction.amount, new Date().toISOString(), transaction.pot_id]
+    );
+
+    // Delete transaction
+    await runQuery('DELETE FROM transactions WHERE id = ?', [id]);
+
+    res.json({ message: 'Transaction deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+module.exports = router;
