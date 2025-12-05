@@ -1,17 +1,14 @@
 ---
 name: Savings Tracker
-version: "1.0.7"
+version: "1.0.9"
 slug: savings-tracker
 description: A modern web-based savings tracker with calendar interface and progress visualization
 url: "https://github.com/Alex-Whyatt/ha-savings-addon"
 arch:
   - aarch64
-  - amd64
-  - armhf
-  - armv7
-  - i386
 startup: application
 boot: auto
+init: false
 ingress: true
 panel_icon: "mdi:cash-multiple"
 ports:
