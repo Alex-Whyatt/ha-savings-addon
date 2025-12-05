@@ -1,0 +1,33 @@
+name: Release Home Assistant Add-on
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from config.yaml
+        id: get_version
+        run: |
+          VERSION=$(grep -o 'version: ".*"' savings-tracker/config.yaml | cut -d '"' -f 2)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: Release v${{ steps.get_version.outputs.version }}
+          body: "New release of the Savings Tracker add-on."
+          # This makes the workflow idempotent. If a release for the tag
+          # already exists, it will not fail the workflow.
+          fail_on_unmatched_files: false
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
