@@ -36,6 +36,7 @@ COPY --from=builder /usr/src/app/backend ./backend
 # Copy the add-on's Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy the s6 service definitions
+# Copy the s6 service definitions and make them executable
 COPY services.d /etc/services.d
+RUN chmod +x /etc/services.d/*/run
 
