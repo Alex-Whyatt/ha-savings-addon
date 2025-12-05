@@ -11,11 +11,10 @@ cd savings-tracker
 if [ "$1" = "api" ]; then
     echo "📡 Starting with API backend (full persistence)..."
 
-    # Start backend in background
+    # Start backend in background (run in subshell to avoid changing cwd)
     echo "🔧 Starting backend server..."
-    cd backend && npm install && npm run dev &
+    (cd backend && npm install && npm run dev) &
     BACKEND_PID=$!
-    cd .. # Return to the savings-tracker directory
 
     # Wait a moment for backend to start
     sleep 3

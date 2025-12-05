@@ -1,6 +1,6 @@
 ---
 name: Savings Tracker
-version: "1.0.11"
+version: "1.0.12"
 slug: savings-tracker
 description: A modern web-based savings tracker with calendar interface and progress visualization
 url: "https://github.com/Alex-Whyatt/ha-savings-addon"
@@ -10,9 +10,7 @@ startup: application
 boot: auto
 init: false
 ingress: true
+ingress_port: 80
 panel_icon: "mdi:cash-multiple"
-ports:
-  80/tcp: null
-webui: "[PROTO:ssl]://[HOST]:[PORT:80]"
 map:
   - data:rw

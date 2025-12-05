@@ -148,7 +148,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
           </Typography>
           <Card>
             <CardContent>
-              <ProjectionChart projections={projections} />
+              <ProjectionChart projections={projections} pots={data.pots} />
             </CardContent>
           </Card>
         </Box>
