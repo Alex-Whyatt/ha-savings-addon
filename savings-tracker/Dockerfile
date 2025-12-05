@@ -1,6 +1,6 @@
 ARG BUILD_FROM
 # --- Build Stage ---
-# Use a Node.js image to build the frontend and install backend dependencies
+# Use a Node.js image to build the frontend only
 FROM node:18-alpine AS builder
 
 WORKDIR /usr/src/app
@@ -12,17 +12,13 @@ COPY . ./
 RUN npm install
 RUN npm run build
 
-# Install only production dependencies for the backend
-RUN cd backend && npm install --only=production
-
 
 # --- Final Stage ---
 # Use the Home Assistant base image provided by the build environment
 FROM $BUILD_FROM
 
-# Install Nginx (to serve the frontend) and Node.js (to run the backend)
-# The base image is minimal and doesn't include these by default.
-RUN apk add --no-cache nginx nodejs npm
+# Install Nginx, Node.js, and build tools for native modules
+RUN apk add --no-cache nginx nodejs npm python3 make g++
 
 # Set the working directory for the final image
 WORKDIR /app
@@ -30,8 +26,14 @@ WORKDIR /app
 # Copy the built frontend from the builder stage
 COPY --from=builder /usr/src/app/dist ./dist
 
-# Copy the backend source code and its production dependencies from the builder stage
-COPY --from=builder /usr/src/app/backend ./backend
+# Copy backend source code (without node_modules)
+COPY backend/package*.json ./backend/
+
+# Install backend dependencies on the target architecture
+RUN cd backend && npm install --only=production
+
+# Copy the rest of the backend source
+COPY backend/*.js ./backend/
 
 # Copy the add-on's Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
