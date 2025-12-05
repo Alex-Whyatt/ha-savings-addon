@@ -32,11 +32,11 @@ const AppContent: React.FC = () => {
   return (
     <Box sx={{
       flexGrow: 1,
-      minHeight: '100vh',
+      minHeight: '100%',
       backgroundColor: '#f5f5f5',
-      width: '100vw',
-      maxWidth: '100vw',
-      overflow: 'hidden'
+      width: '100%',
+      overflowX: 'hidden',
+      overflowY: 'auto'
     }}>
       <AppBar elevation={2}>
         <Toolbar sx={{ flexWrap: 'wrap', gap: 1 }}>

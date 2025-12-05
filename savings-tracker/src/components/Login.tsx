@@ -22,12 +22,14 @@ const Login: React.FC = () => {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        minHeight: '100%',
+        height: '100%',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#f5f5f5',
         p: 2,
+        boxSizing: 'border-box',
       }}
     >
       <Card sx={{ maxWidth: 400, width: '100%' }}>
