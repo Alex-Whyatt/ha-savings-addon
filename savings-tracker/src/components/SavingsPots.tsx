@@ -104,7 +104,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
   };
 
   const handleDelete = (potId: string) => {
-    if (window.confirm('Are you sure you want to delete this savings pot? This will also delete all associated transactions.')) {
+    if (window.confirm('Are you sure you want to delete this account? This will also delete all associated transactions.')) {
       deleteSavingsPot(potId);
       onDataChange();
     }
@@ -138,7 +138,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
           }}>
             <Box>
               <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
-                Total across {pots.length} pot{pots.length !== 1 ? 's' : ''}
+                Total across {pots.length} account{pots.length !== 1 ? 's' : ''}
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 700 }}>
                 £{totalSaved.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
@@ -159,7 +159,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                   whiteSpace: 'nowrap'
                 }}
               >
-                New Pot
+                New Account
               </Button>
             )}
           </Box>
@@ -180,16 +180,16 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
           pb: 1,
           fontWeight: 600 
         }}>
-          {editingPot ? 'Edit Pot' : 'Create New Pot'}
+          {editingPot ? 'Edit Account' : 'Create New Account'}
         </DialogTitle>
         <form onSubmit={handleSubmit}>
           <DialogContent sx={{ pt: 1 }}>
             <TextField
               fullWidth
-              label="Name"
+              label="Account Name"
               value={formData.name}
               onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder="e.g., Emergency Fund"
+              placeholder="e.g., Cash ISA, S&S ISA, NS&I Bonds"
               required
               sx={{ mb: 2 }}
             />
@@ -199,7 +199,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
               label="Description (optional)"
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
-              placeholder="What is this pot for?"
+              placeholder="e.g., Provider name or notes"
               sx={{ mb: 2 }}
             />
 
@@ -266,13 +266,13 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               }}
             >
-              {editingPot ? 'Save Changes' : 'Create Pot'}
+              {editingPot ? 'Save Changes' : 'Create Account'}
             </Button>
           </DialogActions>
         </form>
       </Dialog>
 
-      {/* Pots Grid */}
+      {/* Accounts Grid */}
       {pots.length === 0 ? (
         <Card sx={{ 
           textAlign: 'center', 
@@ -284,10 +284,10 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
         }}>
           <CardContent>
             <Typography variant="h6" color="text.secondary" gutterBottom>
-              No pots yet
+              No accounts yet
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Create your first savings pot to start tracking
+              Add your first savings account to start tracking
             </Typography>
             <Button
               variant="contained"
@@ -297,7 +297,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               }}
             >
-              Create First Pot
+              Add First Account
             </Button>
           </CardContent>
         </Card>

@@ -74,7 +74,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
 
   const getPotName = (potId: string): string => {
     const pot = data.pots.find(p => p.id === potId);
-    return pot?.name || 'Unknown Pot';
+    return pot?.name || 'Unknown Account';
   };
 
   const handleDateClick = (date: Date) => {
@@ -418,7 +418,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
               <TextField
                 select
                 fullWidth
-                label="Savings Pot"
+                label="Account"
                 value={formData.potId}
                 onChange={(e) => setFormData({...formData, potId: e.target.value})}
                 required

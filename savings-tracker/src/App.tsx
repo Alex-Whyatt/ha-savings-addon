@@ -50,7 +50,7 @@ const AppContent: React.FC = () => {
     switch (currentView) {
       case 'dashboard': return 'Dashboard';
       case 'calendar': return 'Calendar';
-      case 'pots': return 'Savings Pots';
+      case 'pots': return 'Accounts';
       default: return 'Dashboard';
     }
   };
@@ -106,7 +106,7 @@ const AppContent: React.FC = () => {
               {[
                 { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
                 { key: 'calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
-                { key: 'pots', label: 'Pots', icon: <SavingsIcon /> }
+                { key: 'pots', label: 'Accounts', icon: <SavingsIcon /> }
               ].map((item) => (
                 <Box
                   key={item.key}
@@ -235,7 +235,7 @@ const AppContent: React.FC = () => {
             >
               {currentView === 'dashboard' && 'Overview of your savings progress'}
               {currentView === 'calendar' && 'Track your monthly contributions'}
-              {currentView === 'pots' && 'Manage your savings goals'}
+              {currentView === 'pots' && 'Manage your savings accounts'}
             </Typography>
           </Box>
         </Box>
@@ -308,7 +308,7 @@ const AppContent: React.FC = () => {
               icon={<CalendarMonthIcon />} 
             />
             <BottomNavigationAction 
-              label="Pots" 
+              label="Accounts" 
               value="pots" 
               icon={<SavingsIcon />} 
             />

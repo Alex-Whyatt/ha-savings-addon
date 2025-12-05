@@ -56,7 +56,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
         <Card sx={{ minWidth: 200, flex: 1 }}>
           <CardContent>
             <Typography color="text.secondary" gutterBottom>
-              Active Pots
+              Active Accounts
             </Typography>
             <Typography variant="h4" component="div">
               {data.pots.length}
@@ -77,7 +77,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" component="h2" gutterBottom>
-          Your Savings Pots
+          Your Accounts
         </Typography>
         <Box sx={{
           display: 'flex',
@@ -89,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
               <Card>
                 <CardContent>
                   <Typography variant="body1" color="text.secondary" align="center">
-                    No savings pots yet. Create your first pot to get started!
+                    No accounts yet. Add your first account to get started!
                   </Typography>
                 </CardContent>
               </Card>
@@ -110,7 +110,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" component="h2" gutterBottom>
-          {otherUserName}'s Savings Pots
+          {otherUserName}'s Accounts
         </Typography>
         <Box sx={{
           display: 'flex',
@@ -122,7 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
               <Card>
                 <CardContent>
                   <Typography variant="body1" color="text.secondary" align="center">
-                    No savings pots yet.
+                    No accounts yet.
                   </Typography>
                 </CardContent>
               </Card>
