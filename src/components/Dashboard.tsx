@@ -1,5 +1,5 @@
 import React from 'react';
-import { SavingsData, SavingsProjection } from '../types';
+import { SavingsData, SavingsProjection, User } from '../types';
 import SavingsPotCard from './SavingsPotCard';
 import ProjectionChart from './ProjectionChart';
 import { Card, CardContent, Typography, Box } from '@mui/material';
@@ -8,9 +8,13 @@ interface DashboardProps {
   data: SavingsData;
   projections: SavingsProjection[];
   onDataChange: () => void;
+  currentUser: User;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange }) => {
+const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, currentUser }) => {
+  console.log("Dashboard received data:", data);
+  console.log("Current user:", currentUser);
+
   const totalSavings = data.pots.reduce((sum, pot) => sum + pot.currentTotal, 0);
   const thisMonthSavings = data.transactions
     .filter(t => {
@@ -20,60 +24,67 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange }
     })
     .reduce((sum, t) => sum + t.amount, 0);
 
+  // Separate pots by user
+  const currentUserPots = data.pots.filter(pot => pot.userId === currentUser.id);
+  const otherUserId = currentUser.id === 'alex' ? 'beth' : 'alex';
+  const otherUserName = otherUserId === 'alex' ? 'Alex' : 'Beth';
+  const otherUserPots = data.pots.filter(pot => pot.userId === otherUserId);
+
+  console.log("Current user pots:", currentUserPots);
+  console.log("Other user pots:", otherUserPots);
+  console.log("Other user ID:", otherUserId);
+
   return (
     <Box>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Dashboard
-      </Typography>
-      <Typography variant="body1" color="text.secondary" gutterBottom>
-        Overview of your savings progress
-      </Typography>
 
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
-        <Box sx={{ flex: '1 1 250px' }}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Total Savings
-              </Typography>
-              <Typography variant="h4" component="div">
-                £{totalSavings.toFixed(2)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: '1 1 250px' }}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Active Pots
-              </Typography>
-              <Typography variant="h4" component="div">
-                {data.pots.length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
-        <Box sx={{ flex: '1 1 250px' }}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                This Month
-              </Typography>
-              <Typography variant="h4" component="div">
-                £{thisMonthSavings.toFixed(2)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
+      <Box sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 3,
+        mb: 4
+      }}>
+        <Card sx={{ minWidth: 200, flex: 1 }}>
+          <CardContent>
+            <Typography color="text.secondary" gutterBottom>
+              Total Savings
+            </Typography>
+            <Typography variant="h4" component="div">
+              £{totalSavings.toFixed(2)}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ minWidth: 200, flex: 1 }}>
+          <CardContent>
+            <Typography color="text.secondary" gutterBottom>
+              Active Pots
+            </Typography>
+            <Typography variant="h4" component="div">
+              {data.pots.length}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card sx={{ minWidth: 200, flex: 1 }}>
+          <CardContent>
+            <Typography color="text.secondary" gutterBottom>
+              This Month
+            </Typography>
+            <Typography variant="h4" component="div">
+              £{thisMonthSavings.toFixed(2)}
+            </Typography>
+          </CardContent>
+        </Card>
       </Box>
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h5" component="h2" gutterBottom>
           Your Savings Pots
         </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {data.pots.length === 0 ? (
+        <Box sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 3
+        }}>
+          {currentUserPots.length === 0 ? (
             <Box sx={{ width: '100%' }}>
               <Card>
                 <CardContent>
@@ -84,11 +95,45 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange }
               </Card>
             </Box>
           ) : (
-            data.pots.map(pot => (
-              <Box key={pot.id} sx={{ flex: '1 1 300px' }}>
+            currentUserPots.map(pot => (
+              <Box key={pot.id} sx={{ minWidth: 300, flex: 1 }}>
                 <SavingsPotCard
                   pot={pot}
                   onUpdate={onDataChange}
+                  currentUser={currentUser}
+                />
+              </Box>
+            ))
+          )}
+        </Box>
+      </Box>
+
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" component="h2" gutterBottom>
+          {otherUserName}'s Savings Pots
+        </Typography>
+        <Box sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 3
+        }}>
+          {otherUserPots.length === 0 ? (
+            <Box sx={{ width: '100%' }}>
+              <Card>
+                <CardContent>
+                  <Typography variant="body1" color="text.secondary" align="center">
+                    No savings pots yet.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Box>
+          ) : (
+            otherUserPots.map(pot => (
+              <Box key={pot.id} sx={{ minWidth: 300, flex: 1 }}>
+                <SavingsPotCard
+                  pot={pot}
+                  onUpdate={onDataChange}
+                  currentUser={currentUser}
                 />
               </Box>
             ))

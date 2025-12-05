@@ -223,37 +223,39 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
           </CardContent>
         </Card>
       ) : (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 2
+        }}>
           {pots.map(pot => (
-            <Box key={pot.id} sx={{ flex: '1 1 300px' }}>
-              <Card>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="h6" component="h3" gutterBottom>
-                        {pot.name}
+            <Card key={pot.id} sx={{ minWidth: 280, flex: 1 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h6" component="h3" gutterBottom>
+                      {pot.name}
+                    </Typography>
+                    <Typography variant="h5" color="primary" sx={{ fontWeight: 'bold' }}>
+                      £{pot.currentTotal.toFixed(2)}
+                    </Typography>
+                    {pot.targetAmount && (
+                      <Typography variant="body2" color="text.secondary">
+                        Target: £{pot.targetAmount.toFixed(2)}
                       </Typography>
-                      <Typography variant="h5" color="primary" sx={{ fontWeight: 'bold' }}>
-                        £{pot.currentTotal.toFixed(2)}
-                      </Typography>
-                      {pot.targetAmount && (
-                        <Typography variant="body2" color="text.secondary">
-                          Target: £{pot.targetAmount.toFixed(2)}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <IconButton size="small" onClick={() => handleEdit(pot)} color="primary">
-                        <Edit />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(pot.id)} color="error">
-                        <Delete />
-                      </IconButton>
-                    </Box>
+                    )}
                   </Box>
-                </CardContent>
-              </Card>
-            </Box>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <IconButton size="small" onClick={() => handleEdit(pot)} color="primary">
+                      <Edit />
+                    </IconButton>
+                    <IconButton size="small" onClick={() => handleDelete(pot.id)} color="error">
+                      <Delete />
+                    </IconButton>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
           ))}
         </Box>
       )}

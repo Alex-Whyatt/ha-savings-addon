@@ -1,7 +1,13 @@
-import { SavingsData, SavingsPot, Transaction } from "./types";
+import {
+  SavingsData,
+  SavingsPot,
+  Transaction,
+  CreateSavingsPot,
+  CreateTransaction,
+} from "./types";
 
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:3001/api";
+  (import.meta as any).env?.VITE_API_URL || "http://localhost:3001/api";
 
 // Helper function to handle API responses
 async function apiRequest<T>(
@@ -10,9 +16,13 @@ async function apiRequest<T>(
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
+  // Get session ID for authorization
+  const sessionId = localStorage.getItem("sessionId");
+
   const response = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
+      ...(sessionId && { Authorization: sessionId }),
       ...options?.headers,
     },
     ...options,
@@ -28,19 +38,29 @@ async function apiRequest<T>(
   return response.json();
 }
 
-// Load all savings data
+// Load user-specific savings data
 export const loadSavingsData = async (): Promise<SavingsData> => {
   try {
-    return await apiRequest<SavingsData>("/data");
+    return await apiRequest<SavingsData>("/user/data");
   } catch (error) {
-    console.error("Error loading savings data:", error);
+    console.error("Error loading API data:", error);
+    return { pots: [], transactions: [] };
+  }
+};
+
+// Load data for a specific user (admin/shared view)
+export const loadUserData = async (userId: string): Promise<SavingsData> => {
+  try {
+    return await apiRequest<SavingsData>(`/admin/user/${userId}/data`);
+  } catch (error) {
+    console.error(`Error loading data for user ${userId}:`, error);
     return { pots: [], transactions: [] };
   }
 };
 
 // Savings Pot operations
 export const addSavingsPot = async (
-  pot: Omit<SavingsPot, "id" | "createdAt" | "updatedAt">
+  pot: CreateSavingsPot
 ): Promise<SavingsPot> => {
   return apiRequest<SavingsPot>("/pots", {
     method: "POST",
@@ -77,15 +97,22 @@ export const deleteSavingsPot = async (id: string): Promise<boolean> => {
 
 // Transaction operations
 export const addTransaction = async (
-  transaction: Omit<Transaction, "id" | "createdAt">
+  transaction: CreateTransaction
 ): Promise<Transaction> => {
-  return apiRequest<Transaction>("/transactions", {
+  const result = await apiRequest<any>("/transactions", {
     method: "POST",
     body: JSON.stringify({
       ...transaction,
       date: transaction.date.toISOString(),
     }),
   });
+
+  // Convert date strings back to Date objects
+  return {
+    ...result,
+    date: new Date(result.date),
+    createdAt: new Date(result.createdAt),
+  };
 };
 
 export const updateTransaction = async (
@@ -95,13 +122,20 @@ export const updateTransaction = async (
   try {
     const updateData = { ...updates };
     if (updates.date) {
-      updateData.date = updates.date.toISOString();
+      (updateData as any).date = updates.date.toISOString();
     }
 
-    return await apiRequest<Transaction>(`/transactions/${id}`, {
+    const result = await apiRequest<any>(`/transactions/${id}`, {
       method: "PUT",
       body: JSON.stringify(updateData),
     });
+
+    // Convert date strings back to Date objects
+    return {
+      ...result,
+      date: new Date(result.date),
+      createdAt: new Date(result.createdAt),
+    };
   } catch (error) {
     console.error("Error updating transaction:", error);
     return null;

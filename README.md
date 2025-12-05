@@ -88,19 +88,44 @@ The backend provides a REST API:
 
 ## Development
 
-### Local Development
+### Quick Start (Recommended)
+
+Use the development script for easy testing:
+
+```bash
+# Development with localStorage (browser persistence)
+./dev.sh
+
+# Development with full API backend (SQLite persistence)
+./dev.sh api
+```
+
+### Manual Development Setup
 
 ```bash
 # Install dependencies
 npm install
 cd backend && npm install
 
-# Start backend
-cd backend && npm run dev
-
-# In another terminal, start frontend
+# Option 1: Frontend only (localStorage)
 npm run dev
+
+# Option 2: Full stack (API + SQLite)
+cd backend && npm run dev    # Terminal 1
+npm run dev                  # Terminal 2 (with VITE_API_URL set)
 ```
+
+### Development Modes
+
+- **localStorage Mode** (default): Data persists in browser localStorage
+  - Fast startup, no backend needed
+  - Good for UI development and testing
+  - Data survives browser refreshes but not clearing cache
+
+- **API Mode**: Full backend with SQLite database
+  - Run `./dev.sh api` for complete testing
+  - Data persists in `backend/savings.db`
+  - Same experience as production Home Assistant setup
 
 ### Building for Production
 
@@ -162,3 +187,4 @@ MIT License - see LICENSE file for details
 - Create an issue on GitHub
 - Check Home Assistant community forums
 - Review the troubleshooting section above
+# ha-savings-addon

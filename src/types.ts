@@ -1,5 +1,12 @@
+export interface User {
+  id: string;
+  name: string;
+  email?: string;
+}
+
 export interface SavingsPot {
   id: string;
+  userId: string;
   name: string;
   description?: string;
   currentTotal: number;
@@ -11,12 +18,18 @@ export interface SavingsPot {
 
 export interface Transaction {
   id: string;
+  userId: string;
   potId: string;
   amount: number;
   date: Date;
   description?: string;
+  repeatMonthly?: boolean;
   createdAt: Date;
 }
+
+// Types for creating new items (without server-generated fields)
+export type CreateSavingsPot = Omit<SavingsPot, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
+export type CreateTransaction = Omit<Transaction, 'id' | 'userId' | 'createdAt'>;
 
 export interface ProjectionData {
   date: Date;

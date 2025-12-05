@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SavingsData, Transaction } from '../types';
 import { addTransaction } from '../storage';
+import { getProjectedRecurringTransactions } from '../projections';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import {
   Card,
@@ -27,26 +28,42 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [projectedTransactions, setProjectedTransactions] = useState<Transaction[]>([]);
   const [formData, setFormData] = useState({
-    potId: '',
+    potId: data.pots[0]?.id || '',
     amount: '',
-    description: ''
+    description: '',
+    repeatMonthly: false
   });
+
+  useEffect(() => {
+    const loadProjected = async () => {
+      const projected = await getProjectedRecurringTransactions();
+      setProjectedTransactions(projected);
+    };
+    loadProjected();
+  }, [data.transactions]);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   const getTransactionsForDate = (date: Date): Transaction[] => {
-    return data.transactions.filter(transaction =>
+    const actualTransactions = data.transactions.filter(transaction =>
       isSameDay(transaction.date, date)
     );
+
+    const projectedForDate = projectedTransactions.filter(transaction =>
+      isSameDay(transaction.date, date)
+    );
+
+    return [...actualTransactions, ...projectedForDate];
   };
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
     setShowAddForm(true);
-    setFormData({ potId: data.pots[0]?.id || '', amount: '', description: '' });
+    setFormData({ potId: data.pots[0]?.id || '', amount: '', description: '', repeatMonthly: false });
   };
 
   const handleSubmitTransaction = (e: React.FormEvent) => {
@@ -61,7 +78,8 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
       potId: formData.potId,
       amount,
       date: selectedDate,
-      description: formData.description || undefined
+      description: formData.description || undefined,
+      repeatMonthly: formData.repeatMonthly
     });
 
     setShowAddForm(false);
@@ -73,16 +91,36 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
   return (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <IconButton onClick={prevMonth}>
+    <Box sx={{
+      display: 'flex',
+      justifyContent: 'center',
+      width: '100%'
+    }}>
+      <Card sx={{
+        width: '100%',
+        maxWidth: '900px',
+        overflow: 'hidden'
+      }}>
+        <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+          flexWrap: 'wrap',
+          gap: 1
+        }}>
+          <IconButton onClick={prevMonth} size="small">
             <ChevronLeft />
           </IconButton>
-          <Typography variant="h5" component="h2">
+          <Typography
+            variant="h5"
+            component="h2"
+            sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' } }}
+          >
             {format(currentMonth, 'MMMM yyyy')}
           </Typography>
-          <IconButton onClick={nextMonth}>
+          <IconButton onClick={nextMonth} size="small">
             <ChevronRight />
           </IconButton>
         </Box>
@@ -111,40 +149,75 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
           ))}
 
           {calendarDays.map(day => {
-            const dayTransactions = getTransactionsForDate(day);
-            const totalForDay = dayTransactions.reduce((sum, t) => sum + t.amount, 0);
+          const dayTransactions = getTransactionsForDate(day);
 
-            return (
-              <Box
-                key={day.toISOString()}
-                onClick={() => handleDateClick(day)}
-                sx={{
-                  p: 1,
-                  minHeight: 80,
-                  cursor: 'pointer',
-                  border: '1px solid',
-                  borderColor: 'grey.200',
-                  bgcolor: !isSameMonth(day, currentMonth) ? 'grey.50' : 'white',
-                  '&:hover': {
-                    bgcolor: 'action.hover'
-                  }
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                  {format(day, 'd')}
+          const actualTransactions = dayTransactions.filter(t => !t.id.startsWith('projected-'));
+          const projectedTransactionsForDay = dayTransactions.filter(t => t.id.startsWith('projected-'));
+
+          const hasActualRecurring = actualTransactions.some(t => t.repeatMonthly);
+          const hasProjectedRecurring = projectedTransactionsForDay.length > 0;
+          const hasOneTime = actualTransactions.some(t => !t.repeatMonthly);
+
+          const actualTotal = actualTransactions.reduce((sum, t) => sum + t.amount, 0);
+          const projectedTotal = projectedTransactionsForDay.reduce((sum, t) => sum + t.amount, 0);
+
+          return (
+            <Box
+              key={day.toISOString()}
+              onClick={() => handleDateClick(day)}
+              sx={{
+                p: 1,
+                minHeight: 80,
+                cursor: 'pointer',
+                border: '1px solid',
+                borderColor: 'grey.200',
+                bgcolor: !isSameMonth(day, currentMonth) ? 'grey.50' : 'white',
+                '&:hover': {
+                  bgcolor: 'action.hover'
+                },
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                {format(day, 'd')}
+              </Typography>
+
+              {/* Show actual transactions */}
+              {actualTotal > 0 && (
+                <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
+                  £{actualTotal.toFixed(2)}
                 </Typography>
-                {totalForDay > 0 && (
-                  <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
-                    £{totalForDay.toFixed(2)}
-                  </Typography>
-                )}
-                {dayTransactions.length > 0 && (
-                  <Typography variant="caption" color="text.secondary">
-                    {dayTransactions.length} transaction{dayTransactions.length !== 1 ? 's' : ''}
-                  </Typography>
-                )}
-              </Box>
-            );
+              )}
+
+              {/* Show projected transactions with different styling */}
+              {projectedTotal > 0 && (
+                <Typography variant="body2" sx={{ color: 'primary.main', fontStyle: 'italic', fontSize: '0.75rem' }}>
+                  +£{projectedTotal.toFixed(2)} projected
+                </Typography>
+              )}
+
+              {(actualTransactions.length > 0 || projectedTransactionsForDay.length > 0) && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                  {hasActualRecurring && (
+                    <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
+                      🔄 Recurring
+                    </Typography>
+                  )}
+                  {hasProjectedRecurring && (
+                    <Typography variant="caption" sx={{ color: 'primary.main', fontStyle: 'italic' }}>
+                      📅 Upcoming
+                    </Typography>
+                  )}
+                  {hasOneTime && (
+                    <Typography variant="caption" color="text.secondary">
+                      {actualTransactions.filter(t => !t.repeatMonthly).length} one-time
+                    </Typography>
+                  )}
+                </Box>
+              )}
+            </Box>
+          );
           })}
         </Box>
       </CardContent>
@@ -193,6 +266,24 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               placeholder="What did you save for?"
             />
+
+            <Box sx={{ mt: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                <input
+                  type="checkbox"
+                  id="repeatMonthly"
+                  checked={formData.repeatMonthly}
+                  onChange={(e) => setFormData({...formData, repeatMonthly: e.target.checked})}
+                  style={{ marginRight: '8px' }}
+                />
+                <label htmlFor="repeatMonthly" style={{ cursor: 'pointer', fontSize: '0.875rem' }}>
+                  Repeat this transaction monthly
+                </label>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                This will show as a recurring transaction in your calendar and projections
+              </Typography>
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setShowAddForm(false)}>Cancel</Button>
@@ -200,7 +291,8 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
           </DialogActions>
         </form>
       </Dialog>
-    </Card>
+      </Card>
+    </Box>
   );
 };
 

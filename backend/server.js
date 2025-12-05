@@ -11,6 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // API routes
+console.log('🔧 Mounting API routes at /api');
 app.use('/api', routes);
 
 // Serve static files from the React app build directory
@@ -18,6 +19,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 
 // Catch all handler: send back React's index.html file for client-side routing
 app.get('*', (req, res) => {
+  console.log('📄 Serving index.html for route:', req.path);
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 

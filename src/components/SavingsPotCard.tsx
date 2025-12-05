@@ -1,14 +1,22 @@
 import React, { useState } from 'react';
-import { SavingsPot } from '../types';
+import { SavingsPot, User } from '../types';
 import { updateSavingsPot } from '../storage';
-import { Card, CardContent, Typography, Box, TextField, Button, LinearProgress } from '@mui/material';
+import { Card, CardContent, Typography, Box, TextField, Button, LinearProgress, Chip } from '@mui/material';
 
 interface SavingsPotCardProps {
   pot: SavingsPot;
   onUpdate: () => void;
+  currentUser?: User;
 }
 
-const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate }) => {
+const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentUser }) => {
+  // Safety check - don't render if pot is invalid
+  if (!pot || typeof pot.currentTotal !== 'number') {
+    console.error('Invalid pot data:', pot);
+    return null;
+  }
+
+  const isCurrentUser = currentUser && pot.userId === currentUser.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(pot.currentTotal.toString());
 
@@ -26,17 +34,31 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate }) => {
     setIsEditing(false);
   };
 
-  const progressPercentage = pot.targetAmount
+  const progressPercentage = pot.targetAmount && pot.currentTotal
     ? Math.min((pot.currentTotal / pot.targetAmount) * 100, 100)
     : 0;
 
   return (
-    <Card sx={{ borderLeft: 4, borderColor: pot.color }}>
+    <Card sx={{
+      borderLeft: 4,
+      borderColor: pot.color,
+      opacity: isCurrentUser ? 1 : 0.8
+    }}>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="h6" component="h3">
-            {pot.name}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6" component="h3">
+              {pot.name}
+            </Typography>
+            {!isCurrentUser && (
+              <Chip
+                label={pot.userId === 'alex' ? 'Alex' : 'Beth'}
+                size="small"
+                variant="outlined"
+                sx={{ fontSize: '0.7rem' }}
+              />
+            )}
+          </Box>
           <Box
             sx={{
               width: 20,
@@ -54,7 +76,7 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate }) => {
         )}
 
         <Box sx={{ mb: 2 }}>
-          {isEditing ? (
+          {isEditing && isCurrentUser ? (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Typography variant="body1">£</Typography>
               <TextField
@@ -87,19 +109,19 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate }) => {
             </Box>
           ) : (
             <Box
-              onClick={() => setIsEditing(true)}
+              onClick={() => isCurrentUser && setIsEditing(true)}
               sx={{
-                cursor: 'pointer',
+                cursor: isCurrentUser ? 'pointer' : 'default',
                 p: 1,
                 borderRadius: 1,
-                '&:hover': { backgroundColor: 'action.hover' }
+                '&:hover': isCurrentUser ? { backgroundColor: 'action.hover' } : {}
               }}
             >
               <Typography variant="h5" component="div" color="primary">
-                £{pot.currentTotal.toFixed(2)}
+                £{(pot?.currentTotal ?? 0).toFixed(2)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Click to edit
+                {isCurrentUser ? 'Click to edit' : 'Read-only'}
               </Typography>
             </Box>
           )}

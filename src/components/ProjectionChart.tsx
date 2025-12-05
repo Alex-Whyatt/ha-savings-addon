@@ -12,20 +12,19 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections }) => {
   const chartData = projections[0]?.data.map((point, index) => {
     const dataPoint: any = {
       date: format(point.date, 'MMM yyyy'),
-      fullDate: point.date
+      fullDate: point.date,
+      total: 0
     };
 
     projections.forEach(proj => {
       const potData = proj.data[index];
       if (potData) {
-        dataPoint[proj.potId] = potData.amount;
+        dataPoint.total += potData.amount;
       }
     });
 
     return dataPoint;
   }) || [];
-
-  const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1'];
 
   return (
     <div className="projection-chart">
@@ -39,17 +38,15 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections }) => {
             labelFormatter={(label) => label}
           />
           <Legend />
-          {projections.map((proj, index) => (
-            <Line
-              key={proj.potId}
-              type="monotone"
-              dataKey={proj.potId}
-              stroke={colors[index % colors.length]}
-              strokeWidth={2}
-              dot={{ r: 4 }}
-              activeDot={{ r: 6 }}
-            />
-          ))}
+          <Line
+            type="monotone"
+            dataKey="total"
+            name="Total Combined Savings"
+            stroke="#667eea"
+            strokeWidth={3}
+            dot={{ r: 4 }}
+            activeDot={{ r: 6 }}
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>
