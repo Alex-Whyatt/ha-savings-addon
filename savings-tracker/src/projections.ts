@@ -7,13 +7,41 @@ import {
 import { loadSavingsData } from "./storage";
 import {
   startOfMonth,
+  endOfMonth,
   eachMonthOfInterval,
   addMonths,
+  addWeeks,
   isAfter,
   isBefore,
   isSameMonth,
   getDate,
+  getDay,
+  differenceInWeeks,
+  startOfDay,
 } from "date-fns";
+
+// Count how many times a specific day of week occurs between two dates
+const countWeekdayOccurrences = (
+  startDate: Date,
+  endDate: Date,
+  targetDay: number
+): number => {
+  let count = 0;
+  let current = new Date(startDate);
+
+  // Move to first occurrence of target day
+  while (getDay(current) !== targetDay && current <= endDate) {
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Count occurrences
+  while (current <= endDate) {
+    count++;
+    current.setDate(current.getDate() + 7);
+  }
+
+  return count;
+};
 
 export const calculateProjection = (
   pot: SavingsPot,
@@ -22,20 +50,26 @@ export const calculateProjection = (
 ): SavingsProjection => {
   const currentDate = new Date();
   const currentDay = currentDate.getDate();
+  const currentDayOfWeek = getDay(currentDate);
 
-  // Get recurring transactions for this pot
-  const recurringTransactions = transactions.filter(
+  // Get monthly recurring transactions for this pot
+  const monthlyRecurringTxns = transactions.filter(
     (t) => t.potId === pot.id && t.repeatMonthly
   );
 
-  // Calculate total monthly recurring amount (sum of all recurring payments)
-  const monthlyRecurringTotal = recurringTransactions.reduce(
+  // Get weekly recurring transactions for this pot
+  const weeklyRecurringTxns = transactions.filter(
+    (t) => t.potId === pot.id && t.repeatWeekly
+  );
+
+  // Calculate total monthly recurring amount
+  const monthlyRecurringTotal = monthlyRecurringTxns.reduce(
     (sum, t) => sum + t.amount,
     0
   );
 
-  // Calculate outstanding payments for current month (scheduled for days after today)
-  const outstandingThisMonth = recurringTransactions
+  // Calculate outstanding monthly payments for current month (scheduled for days after today)
+  const outstandingMonthlyThisMonth = monthlyRecurringTxns
     .filter((t) => t.date.getDate() > currentDay)
     .reduce((sum, t) => sum + t.amount, 0);
 
@@ -52,6 +86,8 @@ export const calculateProjection = (
 
   months.forEach((month, index) => {
     const isCurrentMonth = index === 0;
+    const monthStart = startOfMonth(month);
+    const monthEnd = endOfMonth(month);
 
     if (isCurrentMonth) {
       // Current month: show actual current total (already includes payments up to today)
@@ -60,17 +96,45 @@ export const calculateProjection = (
         amount: cumulativeAmount,
         projected: false,
       });
-    } else if (index === 1) {
-      // First future month: add outstanding from this month + full month's recurring
-      cumulativeAmount += outstandingThisMonth + monthlyRecurringTotal;
-      data.push({
-        date: month,
-        amount: cumulativeAmount,
-        projected: true,
-      });
     } else {
-      // Subsequent future months: add full month's recurring payments
-      cumulativeAmount += monthlyRecurringTotal;
+      // Calculate weekly recurring for this month
+      let weeklyTotal = 0;
+      weeklyRecurringTxns.forEach((t) => {
+        const txnDayOfWeek = getDay(t.date);
+        const occurrences = countWeekdayOccurrences(
+          monthStart,
+          monthEnd,
+          txnDayOfWeek
+        );
+        weeklyTotal += t.amount * occurrences;
+      });
+
+      if (index === 1) {
+        // First future month: add outstanding monthly + full month recurring + weekly
+        // Also add remaining weekly occurrences from current month
+        let remainingWeeklyThisMonth = 0;
+        weeklyRecurringTxns.forEach((t) => {
+          const txnDayOfWeek = getDay(t.date);
+          const tomorrow = new Date(currentDate);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const occurrences = countWeekdayOccurrences(
+            tomorrow,
+            endOfMonth(currentDate),
+            txnDayOfWeek
+          );
+          remainingWeeklyThisMonth += t.amount * occurrences;
+        });
+
+        cumulativeAmount +=
+          outstandingMonthlyThisMonth +
+          monthlyRecurringTotal +
+          remainingWeeklyThisMonth +
+          weeklyTotal;
+      } else {
+        // Subsequent future months: add monthly + weekly recurring
+        cumulativeAmount += monthlyRecurringTotal + weeklyTotal;
+      }
+
       data.push({
         date: month,
         amount: cumulativeAmount,
@@ -137,13 +201,15 @@ export const getProjectedRecurringTransactions = async (): Promise<
   Transaction[]
 > => {
   const { transactions } = await loadSavingsData();
-  const currentDate = new Date();
+  const currentDate = startOfDay(new Date());
   const projectedTransactions: Transaction[] = [];
 
-  // Find all recurring transactions (original ones that started the recurrence)
-  const recurringTransactions = transactions.filter((t) => t.repeatMonthly);
+  // Find all monthly recurring transactions
+  const monthlyRecurringTransactions = transactions.filter(
+    (t) => t.repeatMonthly
+  );
 
-  for (const recurring of recurringTransactions) {
+  for (const recurring of monthlyRecurringTransactions) {
     const recurringDate = recurring.date.getDate(); // Day of month (1-31)
     let nextDate = new Date(recurring.date);
 
@@ -152,7 +218,7 @@ export const getProjectedRecurringTransactions = async (): Promise<
       nextDate = addMonths(nextDate, 1);
 
       // Only include future transactions
-      if (!isAfter(nextDate, currentDate)) continue;
+      if (!isAfter(startOfDay(nextDate), currentDate)) continue;
 
       // Check if a transaction already exists for this month
       const existingTransaction = transactions.find(
@@ -166,16 +232,45 @@ export const getProjectedRecurringTransactions = async (): Promise<
       if (!existingTransaction) {
         // Create a projected transaction for display only
         projectedTransactions.push({
-          id: `projected-${recurring.id}-${i}`,
+          id: `projected-monthly-${recurring.id}-${i}`,
           userId: recurring.userId,
           potId: recurring.potId,
           amount: recurring.amount,
-          date: nextDate,
+          date: new Date(nextDate),
           description: recurring.description,
           repeatMonthly: true,
           createdAt: recurring.createdAt,
         });
       }
+    }
+  }
+
+  // Find all weekly recurring transactions
+  const weeklyRecurringTransactions = transactions.filter(
+    (t) => t.repeatWeekly
+  );
+
+  for (const recurring of weeklyRecurringTransactions) {
+    let nextDate = new Date(recurring.date);
+
+    // Generate projected weekly transactions for the next 26 weeks (6 months)
+    for (let i = 1; i <= 26; i++) {
+      nextDate = addWeeks(nextDate, 1);
+
+      // Only include future transactions
+      if (!isAfter(startOfDay(nextDate), currentDate)) continue;
+
+      // Create a projected transaction for display only
+      projectedTransactions.push({
+        id: `projected-weekly-${recurring.id}-${i}`,
+        userId: recurring.userId,
+        potId: recurring.potId,
+        amount: recurring.amount,
+        date: new Date(nextDate),
+        description: recurring.description,
+        repeatWeekly: true,
+        createdAt: recurring.createdAt,
+      });
     }
   }
 

@@ -24,12 +24,19 @@ export interface Transaction {
   date: Date;
   description?: string;
   repeatMonthly?: boolean;
+  repeatWeekly?: boolean;
   createdAt: Date;
 }
 
 // Types for creating new items (without server-generated fields)
-export type CreateSavingsPot = Omit<SavingsPot, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
-export type CreateTransaction = Omit<Transaction, 'id' | 'userId' | 'createdAt'>;
+export type CreateSavingsPot = Omit<
+  SavingsPot,
+  "id" | "userId" | "createdAt" | "updatedAt"
+>;
+export type CreateTransaction = Omit<
+  Transaction,
+  "id" | "userId" | "createdAt"
+>;
 
 export interface ProjectionData {
   date: Date;

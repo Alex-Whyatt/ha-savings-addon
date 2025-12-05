@@ -6,8 +6,8 @@ import {
   CreateTransaction,
 } from "./types";
 
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_URL || "http://localhost:3001/api";
+// Use relative URL for production (HA ingress), absolute URL only for local dev
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "./api";
 
 // Helper function to handle API responses
 async function apiRequest<T>(

@@ -52,6 +52,7 @@ function initializeDatabase() {
       date TEXT NOT NULL,
       description TEXT,
       repeat_monthly INTEGER DEFAULT 0,
+      repeat_weekly INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (pot_id) REFERENCES savings_pots (id) ON DELETE CASCADE
@@ -61,8 +62,22 @@ function initializeDatabase() {
       console.error('Error creating tables:', err.message);
     } else {
       console.log('Database tables initialized.');
+      // Run migrations for existing databases
+      runMigrations();
       // Seed initial users
       seedUsers();
+    }
+  });
+}
+
+// Run migrations for existing databases
+function runMigrations() {
+  // Add repeat_weekly column if it doesn't exist
+  db.run(`ALTER TABLE transactions ADD COLUMN repeat_weekly INTEGER DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Migration error:', err.message);
+    } else if (!err) {
+      console.log('Migration: Added repeat_weekly column');
     }
   });
 }

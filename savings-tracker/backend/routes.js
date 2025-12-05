@@ -119,6 +119,7 @@ router.get('/admin/user/:userId/data', requireAuth, async (req, res) => {
       date: new Date(transaction.date),
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
+      repeatWeekly: transaction.repeat_weekly === 1,
       createdAt: new Date(transaction.created_at)
     }));
 
@@ -161,6 +162,7 @@ router.get('/user/data', requireAuth, async (req, res) => {
       date: new Date(transaction.date),
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
+      repeatWeekly: transaction.repeat_weekly === 1,
       createdAt: new Date(transaction.created_at)
     }));
 
@@ -191,6 +193,7 @@ router.get('/data', async (req, res) => {
       ...transaction,
       date: new Date(transaction.date),
       repeatMonthly: transaction.repeat_monthly === 1,
+      repeatWeekly: transaction.repeat_weekly === 1,
       createdAt: new Date(transaction.created_at)
     }));
 
@@ -333,6 +336,7 @@ router.get('/transactions', requireAuth, async (req, res) => {
       date: new Date(transaction.date),
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
+      repeatWeekly: transaction.repeat_weekly === 1,
       createdAt: new Date(transaction.created_at)
     }));
     res.json(formattedTransactions);
@@ -344,7 +348,7 @@ router.get('/transactions', requireAuth, async (req, res) => {
 
 router.post('/transactions', requireAuth, async (req, res) => {
   try {
-    const { potId, amount, date, description, repeatMonthly } = req.body;
+    const { potId, amount, date, description, repeatMonthly, repeatWeekly } = req.body;
     const userId = req.user.id;
 
     if (!potId || typeof amount !== 'number' || !date) {
@@ -363,8 +367,8 @@ router.post('/transactions', requireAuth, async (req, res) => {
 
     // Insert transaction
     await runQuery(
-      'INSERT INTO transactions (id, user_id, pot_id, amount, date, description, repeat_monthly, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, userId, potId, amount, transactionDate, description || null, repeatMonthly ? 1 : 0, now]
+      'INSERT INTO transactions (id, user_id, pot_id, amount, date, description, repeat_monthly, repeat_weekly, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, userId, potId, amount, transactionDate, description || null, repeatMonthly ? 1 : 0, repeatWeekly ? 1 : 0, now]
     );
 
     // Update pot total
@@ -382,6 +386,7 @@ router.post('/transactions', requireAuth, async (req, res) => {
       date: new Date(transaction.date),
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
+      repeatWeekly: transaction.repeat_weekly === 1,
       createdAt: new Date(transaction.created_at)
     };
 
@@ -395,7 +400,7 @@ router.post('/transactions', requireAuth, async (req, res) => {
 router.put('/transactions/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { potId, amount, date, description, repeatMonthly } = req.body;
+    const { potId, amount, date, description, repeatMonthly, repeatWeekly } = req.body;
     const userId = req.user.id;
 
     const existingTransaction = await getRow('SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, userId]);
@@ -411,8 +416,8 @@ router.put('/transactions/:id', requireAuth, async (req, res) => {
 
     // Update transaction
     await runQuery(
-      'UPDATE transactions SET pot_id = ?, amount = ?, date = ?, description = ?, repeat_monthly = ? WHERE id = ?',
-      [potId || existingTransaction.pot_id, amount !== undefined ? amount : existingTransaction.amount, transactionDate, description !== undefined ? description : existingTransaction.description, repeatMonthly !== undefined ? (repeatMonthly ? 1 : 0) : existingTransaction.repeat_monthly, id]
+      'UPDATE transactions SET pot_id = ?, amount = ?, date = ?, description = ?, repeat_monthly = ?, repeat_weekly = ? WHERE id = ?',
+      [potId || existingTransaction.pot_id, amount !== undefined ? amount : existingTransaction.amount, transactionDate, description !== undefined ? description : existingTransaction.description, repeatMonthly !== undefined ? (repeatMonthly ? 1 : 0) : existingTransaction.repeat_monthly, repeatWeekly !== undefined ? (repeatWeekly ? 1 : 0) : existingTransaction.repeat_weekly, id]
     );
 
     // Update pot total if amount changed
@@ -434,6 +439,7 @@ router.put('/transactions/:id', requireAuth, async (req, res) => {
       date: new Date(updatedTransaction.date),
       description: updatedTransaction.description,
       repeatMonthly: updatedTransaction.repeat_monthly === 1,
+      repeatWeekly: updatedTransaction.repeat_weekly === 1,
       createdAt: new Date(updatedTransaction.created_at)
     };
 

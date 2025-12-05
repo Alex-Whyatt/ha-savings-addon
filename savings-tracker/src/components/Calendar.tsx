@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SavingsData, Transaction } from '../types';
-import { addTransaction } from '../storage';
+import { addTransaction, deleteTransaction } from '../storage';
 import { getProjectedRecurringTransactions } from '../projections';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import {
@@ -15,25 +15,37 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  IconButton
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Divider,
+  Chip
 } from '@mui/material';
-import { ChevronLeft, ChevronRight } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Delete, Add } from '@mui/icons-material';
 
 interface CalendarProps {
   data: SavingsData;
   onDataChange: () => void;
 }
 
+type RecurrenceType = 'none' | 'weekly' | 'monthly';
+type DialogMode = 'view' | 'add';
+
 const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DialogMode>('view');
   const [projectedTransactions, setProjectedTransactions] = useState<Transaction[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [formData, setFormData] = useState({
     potId: data.pots[0]?.id || '',
     amount: '',
     description: '',
-    repeatMonthly: false
+    recurrence: 'none' as RecurrenceType
   });
 
   useEffect(() => {
@@ -60,10 +72,24 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
     return [...actualTransactions, ...projectedForDate];
   };
 
+  const getPotName = (potId: string): string => {
+    const pot = data.pots.find(p => p.id === potId);
+    return pot?.name || 'Unknown Pot';
+  };
+
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
-    setShowAddForm(true);
-    setFormData({ potId: data.pots[0]?.id || '', amount: '', description: '', repeatMonthly: false });
+    setDialogMode('view');
+    setDialogOpen(true);
+  };
+
+  const handleAddNew = () => {
+    setFormData({ potId: data.pots[0]?.id || '', amount: '', description: '', recurrence: 'none' });
+    setDialogMode('add');
+  };
+
+  const handleBackToView = () => {
+    setDialogMode('view');
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -79,16 +105,40 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
       amount,
       date: selectedDate,
       description: formData.description || undefined,
-      repeatMonthly: formData.repeatMonthly
+      repeatMonthly: formData.recurrence === 'monthly',
+      repeatWeekly: formData.recurrence === 'weekly'
     });
 
-    setShowAddForm(false);
-    setSelectedDate(null);
+    setDialogMode('view');
     onDataChange();
+  };
+
+  const handleDeleteClick = (transaction: Transaction) => {
+    setTransactionToDelete(transaction);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!transactionToDelete) return;
+
+    await deleteTransaction(transactionToDelete.id);
+    setDeleteConfirmOpen(false);
+    setTransactionToDelete(null);
+    onDataChange();
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setSelectedDate(null);
+    setDialogMode('view');
   };
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+
+  const selectedDateTransactions = selectedDate ? getTransactionsForDate(selectedDate) : [];
+  const actualTransactionsForDialog = selectedDateTransactions.filter(t => !t.id.startsWith('projected-'));
+  const projectedTransactionsForDialog = selectedDateTransactions.filter(t => t.id.startsWith('projected-'));
 
   return (
     <Box sx={{
@@ -154,9 +204,10 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
           const actualTransactions = dayTransactions.filter(t => !t.id.startsWith('projected-'));
           const projectedTransactionsForDay = dayTransactions.filter(t => t.id.startsWith('projected-'));
 
-          const hasActualRecurring = actualTransactions.some(t => t.repeatMonthly);
+          const hasActualMonthlyRecurring = actualTransactions.some(t => t.repeatMonthly);
+          const hasActualWeeklyRecurring = actualTransactions.some(t => t.repeatWeekly);
           const hasProjectedRecurring = projectedTransactionsForDay.length > 0;
-          const hasOneTime = actualTransactions.some(t => !t.repeatMonthly);
+          const hasOneTime = actualTransactions.some(t => !t.repeatMonthly && !t.repeatWeekly);
 
           const actualTotal = actualTransactions.reduce((sum, t) => sum + t.amount, 0);
           const projectedTotal = projectedTransactionsForDay.reduce((sum, t) => sum + t.amount, 0);
@@ -199,9 +250,14 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
 
               {(actualTransactions.length > 0 || projectedTransactionsForDay.length > 0) && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                  {hasActualRecurring && (
+                  {hasActualWeeklyRecurring && (
+                    <Typography variant="caption" sx={{ color: 'secondary.main', fontWeight: 'bold' }}>
+                      🔄 Weekly
+                    </Typography>
+                  )}
+                  {hasActualMonthlyRecurring && (
                     <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      🔄 Recurring
+                      🔄 Monthly
                     </Typography>
                   )}
                   {hasProjectedRecurring && (
@@ -211,7 +267,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
                   )}
                   {hasOneTime && (
                     <Typography variant="caption" color="text.secondary">
-                      {actualTransactions.filter(t => !t.repeatMonthly).length} one-time
+                      {actualTransactions.filter(t => !t.repeatMonthly && !t.repeatWeekly).length} one-time
                     </Typography>
                   )}
                 </Box>
@@ -222,74 +278,231 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
         </Box>
       </CardContent>
 
-      <Dialog open={showAddForm} onClose={() => setShowAddForm(false)} maxWidth="sm" fullWidth>
+      {/* Main Dialog - View/Add Transactions */}
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
-          Add Transaction - {selectedDate ? format(selectedDate, 'PPP') : ''}
+          {dialogMode === 'view' ? (
+            selectedDate ? format(selectedDate, 'EEEE, MMMM do, yyyy') : ''
+          ) : (
+            `Add Transaction - ${selectedDate ? format(selectedDate, 'PPP') : ''}`
+          )}
         </DialogTitle>
-        <form onSubmit={handleSubmitTransaction}>
-          <DialogContent>
-            <TextField
-              select
-              fullWidth
-              label="Savings Pot"
-              value={formData.potId}
-              onChange={(e) => setFormData({...formData, potId: e.target.value})}
-              required
-              sx={{ mb: 2 }}
-            >
-              {data.pots.map(pot => (
-                <MenuItem key={pot.id} value={pot.id}>
-                  {pot.name}
+
+        {dialogMode === 'view' ? (
+          <>
+            <DialogContent>
+              {actualTransactionsForDialog.length === 0 && projectedTransactionsForDialog.length === 0 ? (
+                <Typography color="text.secondary" align="center" sx={{ py: 2 }}>
+                  No transactions on this day
+                </Typography>
+              ) : (
+                <>
+                  {/* Actual Transactions */}
+                  {actualTransactionsForDialog.length > 0 && (
+                    <>
+                      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                        Transactions
+                      </Typography>
+                      <List dense>
+                        {actualTransactionsForDialog.map((transaction) => (
+                          <ListItem
+                            key={transaction.id}
+                            sx={{
+                              bgcolor: 'grey.50',
+                              borderRadius: 1,
+                              mb: 1
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography variant="body1" fontWeight="bold">
+                                    £{transaction.amount.toFixed(2)}
+                                  </Typography>
+                                  {transaction.repeatWeekly && (
+                                    <Chip label="Weekly" size="small" color="secondary" />
+                                  )}
+                                  {transaction.repeatMonthly && (
+                                    <Chip label="Monthly" size="small" color="primary" />
+                                  )}
+                                </Box>
+                              }
+                              secondary={
+                                <>
+                                  <Typography variant="body2" component="span">
+                                    {getPotName(transaction.potId)}
+                                  </Typography>
+                                  {transaction.description && (
+                                    <Typography variant="body2" component="span" color="text.secondary">
+                                      {' — '}{transaction.description}
+                                    </Typography>
+                                  )}
+                                </>
+                              }
+                            />
+                            <ListItemSecondaryAction>
+                              <IconButton
+                                edge="end"
+                                onClick={() => handleDeleteClick(transaction)}
+                                color="error"
+                                size="small"
+                              >
+                                <Delete />
+                              </IconButton>
+                            </ListItemSecondaryAction>
+                          </ListItem>
+                        ))}
+                      </List>
+                    </>
+                  )}
+
+                  {/* Projected Transactions */}
+                  {projectedTransactionsForDialog.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                        Upcoming (Projected)
+                      </Typography>
+                      <List dense>
+                        {projectedTransactionsForDialog.map((transaction) => (
+                          <ListItem
+                            key={transaction.id}
+                            sx={{
+                              bgcolor: 'primary.50',
+                              borderRadius: 1,
+                              mb: 1,
+                              opacity: 0.8
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <Typography variant="body1" fontWeight="bold" color="primary">
+                                    £{transaction.amount.toFixed(2)}
+                                  </Typography>
+                                  <Chip label="Projected" size="small" variant="outlined" />
+                                </Box>
+                              }
+                              secondary={
+                                <Typography variant="body2">
+                                  {getPotName(transaction.potId)}
+                                  {transaction.description && ` — ${transaction.description}`}
+                                </Typography>
+                              }
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                      <Typography variant="caption" color="text.secondary">
+                        To remove projected transactions, delete the original recurring transaction
+                      </Typography>
+                    </>
+                  )}
+                </>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseDialog}>Close</Button>
+              <Button
+                variant="contained"
+                startIcon={<Add />}
+                onClick={handleAddNew}
+              >
+                Add Transaction
+              </Button>
+            </DialogActions>
+          </>
+        ) : (
+          <form onSubmit={handleSubmitTransaction}>
+            <DialogContent>
+              <TextField
+                select
+                fullWidth
+                label="Savings Pot"
+                value={formData.potId}
+                onChange={(e) => setFormData({...formData, potId: e.target.value})}
+                required
+                sx={{ mb: 2 }}
+              >
+                {data.pots.map(pot => (
+                  <MenuItem key={pot.id} value={pot.id}>
+                    {pot.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                fullWidth
+                label="Amount (£)"
+                type="number"
+                value={formData.amount}
+                onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                placeholder="0.00"
+                required
+                inputProps={{
+                  step: "0.01",
+                  min: "0.01"
+                }}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Description (optional)"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                placeholder="What did you save for?"
+              />
+
+              <TextField
+                select
+                fullWidth
+                label="Recurrence"
+                value={formData.recurrence}
+                onChange={(e) => setFormData({...formData, recurrence: e.target.value as RecurrenceType})}
+                sx={{ mt: 2 }}
+                helperText="Recurring transactions will appear in your calendar and projections"
+              >
+                <MenuItem value="none">One-time (no repeat)</MenuItem>
+                <MenuItem value="weekly">
+                  Weekly (every {selectedDate ? format(selectedDate, 'EEEE') : 'week'})
                 </MenuItem>
-              ))}
-            </TextField>
+                <MenuItem value="monthly">
+                  Monthly (on the {selectedDate ? format(selectedDate, 'do') : 'same date'})
+                </MenuItem>
+              </TextField>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleBackToView}>Back</Button>
+              <Button type="submit" variant="contained">Add Transaction</Button>
+            </DialogActions>
+          </form>
+        )}
+      </Dialog>
 
-            <TextField
-              fullWidth
-              label="Amount (£)"
-              type="number"
-              value={formData.amount}
-              onChange={(e) => setFormData({...formData, amount: e.target.value})}
-              placeholder="0.00"
-              required
-              inputProps={{
-                step: "0.01",
-                min: "0.01"
-              }}
-              sx={{ mb: 2 }}
-            />
-
-            <TextField
-              fullWidth
-              label="Description (optional)"
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              placeholder="What did you save for?"
-            />
-
-            <Box sx={{ mt: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                <input
-                  type="checkbox"
-                  id="repeatMonthly"
-                  checked={formData.repeatMonthly}
-                  onChange={(e) => setFormData({...formData, repeatMonthly: e.target.checked})}
-                  style={{ marginRight: '8px' }}
-                />
-                <label htmlFor="repeatMonthly" style={{ cursor: 'pointer', fontSize: '0.875rem' }}>
-                  Repeat this transaction monthly
-                </label>
-              </Box>
-              <Typography variant="caption" color="text.secondary">
-                This will show as a recurring transaction in your calendar and projections
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)}>
+        <DialogTitle>Delete Transaction?</DialogTitle>
+        <DialogContent>
+          {transactionToDelete && (
+            <>
+              <Typography>
+                Are you sure you want to delete this £{transactionToDelete.amount.toFixed(2)} transaction?
               </Typography>
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setShowAddForm(false)}>Cancel</Button>
-            <Button type="submit" variant="contained">Add Transaction</Button>
-          </DialogActions>
-        </form>
+              {(transactionToDelete.repeatWeekly || transactionToDelete.repeatMonthly) && (
+                <Typography color="warning.main" sx={{ mt: 2 }}>
+                  ⚠️ This is a recurring transaction. Deleting it will remove this payment and all future occurrences.
+                </Typography>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">
+            Delete{transactionToDelete?.repeatWeekly || transactionToDelete?.repeatMonthly ? ' All' : ''}
+          </Button>
+        </DialogActions>
       </Dialog>
       </Card>
     </Box>
