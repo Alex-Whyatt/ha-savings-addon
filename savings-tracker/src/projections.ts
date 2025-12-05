@@ -16,7 +16,6 @@ import {
   isSameMonth,
   getDate,
   getDay,
-  differenceInWeeks,
   startOfDay,
 } from "date-fns";
 
@@ -50,7 +49,6 @@ export const calculateProjection = (
 ): SavingsProjection => {
   const currentDate = new Date();
   const currentDay = currentDate.getDate();
-  const currentDayOfWeek = getDay(currentDate);
 
   // Get monthly recurring transactions for this pot
   const monthlyRecurringTxns = transactions.filter(
