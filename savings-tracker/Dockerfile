@@ -33,11 +33,9 @@ COPY --from=builder /usr/src/app/dist ./dist
 # Copy the backend source code and its production dependencies from the builder stage
 COPY --from=builder /usr/src/app/backend ./backend
 
-# Copy the add-on's Nginx configuration and run script
+# Copy the add-on's Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
-COPY run.sh /
-RUN chmod +x /run.sh
 
-# Set the command to run when the container starts
-CMD ["/run.sh"]
+# Copy the s6 service definitions
+COPY services.d /etc/services.d
 

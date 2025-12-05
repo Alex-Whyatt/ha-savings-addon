@@ -4,6 +4,9 @@
 echo "🚀 Starting Savings Tracker in Development Mode"
 echo "=============================================="
 
+# Change to the application directory
+cd savings-tracker
+
 # Check if we should run with API backend or localStorage
 if [ "$1" = "api" ]; then
     echo "📡 Starting with API backend (full persistence)..."
@@ -12,6 +15,7 @@ if [ "$1" = "api" ]; then
     echo "🔧 Starting backend server..."
     cd backend && npm install && npm run dev &
     BACKEND_PID=$!
+    cd .. # Return to the savings-tracker directory
 
     # Wait a moment for backend to start
     sleep 3
@@ -26,7 +30,7 @@ if [ "$1" = "api" ]; then
     echo "📱 Frontend: http://localhost:5173"
     echo "🔌 Backend API: http://localhost:3001"
     echo ""
-    echo "💾 Data persists in SQLite database: backend/savings.db"
+    echo "💾 Data persists in SQLite database: savings-tracker/backend/savings.db"
     echo ""
     echo "Press Ctrl+C to stop all servers"
 

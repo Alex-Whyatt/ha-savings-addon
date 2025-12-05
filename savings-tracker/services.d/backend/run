@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Starting Savings Tracker backend..."
+# Set the database path for persistent storage
+export DATABASE_PATH=/data/savings.db
+# Navigate to the backend directory
+cd /app/backend
+# Start the node server
+exec npm start
