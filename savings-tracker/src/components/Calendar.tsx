@@ -66,7 +66,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
     setFormData({ potId: data.pots[0]?.id || '', amount: '', description: '', repeatMonthly: false });
   };
 
-  const handleSubmitTransaction = (e: React.FormEvent) => {
+  const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const amount = parseFloat(formData.amount);
@@ -74,7 +74,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, onDataChange }) => {
       return;
     }
 
-    addTransaction({
+    await addTransaction({
       potId: formData.potId,
       amount,
       date: selectedDate,

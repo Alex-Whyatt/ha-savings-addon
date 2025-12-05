@@ -7,7 +7,6 @@ import {
 import { loadSavingsData } from "./storage";
 import {
   startOfMonth,
-  endOfMonth,
   eachMonthOfInterval,
   addMonths,
   isAfter,
@@ -19,83 +18,70 @@ import {
 export const calculateProjection = (
   pot: SavingsPot,
   transactions: Transaction[],
-  monthsAhead: number = 12,
-  monthlyContribution?: number
+  monthsAhead: number = 12
 ): SavingsProjection => {
-  const potTransactions = transactions
-    .filter((t) => t.potId === pot.id)
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const currentDate = new Date();
+  const currentDay = currentDate.getDate();
+
+  // Get recurring transactions for this pot
+  const recurringTransactions = transactions.filter(
+    (t) => t.potId === pot.id && t.repeatMonthly
+  );
+
+  // Calculate total monthly recurring amount (sum of all recurring payments)
+  const monthlyRecurringTotal = recurringTransactions.reduce(
+    (sum, t) => sum + t.amount,
+    0
+  );
+
+  // Calculate outstanding payments for current month (scheduled for days after today)
+  const outstandingThisMonth = recurringTransactions
+    .filter((t) => t.date.getDate() > currentDay)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  // Start with the pot's actual current total
+  let cumulativeAmount = pot.currentTotal;
 
   const data: ProjectionData[] = [];
 
-  // Add historical data points (one per month)
-  const currentDate = new Date();
-  const startDate =
-    potTransactions.length > 0
-      ? startOfMonth(potTransactions[0].date)
-      : startOfMonth(currentDate);
-
+  // Generate months from current month onwards
   const months = eachMonthOfInterval({
-    start: startDate,
+    start: startOfMonth(currentDate),
     end: addMonths(currentDate, monthsAhead),
   });
 
-  let cumulativeAmount = 0;
+  months.forEach((month, index) => {
+    const isCurrentMonth = index === 0;
 
-  months.forEach((month) => {
-    const monthStart = startOfMonth(month);
-    const monthEnd = endOfMonth(month);
-
-    // Add transactions for this month
-    const monthTransactions = potTransactions.filter(
-      (t) => !isBefore(t.date, monthStart) && !isAfter(t.date, monthEnd)
-    );
-
-    monthTransactions.forEach((transaction) => {
-      cumulativeAmount += transaction.amount;
-    });
-
-    // Add recurring transactions for future months
-    if (isAfter(month, currentDate)) {
-      const recurringTransactions = potTransactions.filter(
-        (t) =>
-          t.repeatMonthly &&
-          t.date.getDate() === month.getDate() &&
-          isBefore(t.date, month)
-      );
-
-      recurringTransactions.forEach((transaction) => {
-        cumulativeAmount += transaction.amount;
+    if (isCurrentMonth) {
+      // Current month: show actual current total (already includes payments up to today)
+      data.push({
+        date: month,
+        amount: cumulativeAmount,
+        projected: false,
       });
-    }
-
-    // If this is the current month and we have a monthly contribution, add it
-    if (
-      monthlyContribution &&
-      month.getMonth() === currentDate.getMonth() &&
-      month.getFullYear() === currentDate.getFullYear()
-    ) {
-      cumulativeAmount += monthlyContribution;
-    }
-
-    const isProjected = isAfter(month, currentDate);
-
-    data.push({
-      date: month,
-      amount: cumulativeAmount,
-      projected: isProjected,
-    });
-
-    // For future months, add monthly contributions
-    if (isProjected && monthlyContribution) {
-      cumulativeAmount += monthlyContribution;
+    } else if (index === 1) {
+      // First future month: add outstanding from this month + full month's recurring
+      cumulativeAmount += outstandingThisMonth + monthlyRecurringTotal;
+      data.push({
+        date: month,
+        amount: cumulativeAmount,
+        projected: true,
+      });
+    } else {
+      // Subsequent future months: add full month's recurring payments
+      cumulativeAmount += monthlyRecurringTotal;
+      data.push({
+        date: month,
+        amount: cumulativeAmount,
+        projected: true,
+      });
     }
   });
 
   return {
     potId: pot.id,
     data,
-    monthlyContribution,
   };
 };
 
