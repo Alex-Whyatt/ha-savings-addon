@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SavingsPot } from '../types';
+import { SavingsPot, User } from '../types';
 import { addSavingsPot, updateSavingsPot, deleteSavingsPot } from '../storage';
 import {
   Card,
@@ -19,6 +19,8 @@ import {
   useTheme
 } from '@mui/material';
 import { Add, Edit, Delete } from '@mui/icons-material';
+import ExpenseCategories from './ExpenseCategories';
+import { useAuth } from '../AuthContext';
 
 interface SavingsPotsProps {
   pots: SavingsPot[];
@@ -28,6 +30,7 @@ interface SavingsPotsProps {
 const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { user } = useAuth();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingPot, setEditingPot] = useState<SavingsPot | null>(null);
   const [formData, setFormData] = useState({
@@ -436,6 +439,22 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
               </Card>
             );
           })}
+        </Box>
+      )}
+
+      {/* Expense Categories Section */}
+      {user && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h5" component="h2" gutterBottom sx={{ 
+            fontWeight: 600,
+            color: 'text.primary'
+          }}>
+            Expense Categories
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Create categories to organize your recurring expenses. Categories are shared with all users.
+          </Typography>
+          <ExpenseCategories currentUser={user} />
         </Box>
       )}
 

@@ -57,6 +57,39 @@ function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (pot_id) REFERENCES savings_pots (id) ON DELETE CASCADE
     )
+  `);
+
+  // Create upcoming_spends table (collaborative - all users can see all spends)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS upcoming_spends (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      due_date TEXT,
+      is_recurring INTEGER DEFAULT 0,
+      recurrence_interval TEXT,
+      category_id TEXT,
+      completed INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+      FOREIGN KEY (category_id) REFERENCES expense_categories (id) ON DELETE SET NULL
+    )
+  `);
+
+  // Create expense_categories table (collaborative - all users can see/use all categories)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS expense_categories (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL,
+      icon TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
   `, (err) => {
     if (err) {
       console.error('Error creating tables:', err.message);
@@ -80,14 +113,48 @@ function runMigrations() {
       console.log('Migration: Added repeat_weekly column');
     }
   });
+
+  // Add category_id column to upcoming_spends if it doesn't exist
+  db.run(`ALTER TABLE upcoming_spends ADD COLUMN category_id TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Migration error:', err.message);
+    } else if (!err) {
+      console.log('Migration: Added category_id column to upcoming_spends');
+    }
+  });
+}
+
+// Get users from configuration or use defaults
+function getConfiguredUsers() {
+  const seedUsersEnv = process.env.SEED_USERS;
+  
+  if (seedUsersEnv) {
+    try {
+      const configuredUsers = JSON.parse(seedUsersEnv);
+      if (Array.isArray(configuredUsers) && configuredUsers.length > 0) {
+        console.log(`Using ${configuredUsers.length} user(s) from configuration`);
+        return configuredUsers.map(user => ({
+          id: user.id.toLowerCase(),
+          name: user.name,
+          email: user.email || `${user.id.toLowerCase()}@example.com`
+        }));
+      }
+    } catch (err) {
+      console.error('Error parsing SEED_USERS configuration:', err.message);
+    }
+  }
+  
+  // Default users for backward compatibility
+  console.log('Using default users (alex, beth)');
+  return [
+    { id: 'alex', name: 'Alex', email: 'alex@example.com' },
+    { id: 'beth', name: 'Beth', email: 'beth@example.com' }
+  ];
 }
 
 // Seed initial users
 function seedUsers() {
-  const users = [
-    { id: 'alex', name: 'Alex', email: 'alex@example.com' },
-    { id: 'beth', name: 'Beth', email: 'beth@example.com' }
-  ];
+  const users = getConfiguredUsers();
 
   users.forEach(user => {
     db.run(

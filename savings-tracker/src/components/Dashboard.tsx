@@ -2,9 +2,12 @@ import React from 'react';
 import { SavingsData, SavingsProjection, User } from '../types';
 import SavingsPotCard from './SavingsPotCard';
 import ProjectionChart from './ProjectionChart';
+import UpcomingSpends from './UpcomingSpends';
+import RecurringExpenses from './RecurringExpenses';
 import { Card, CardContent, Typography, Box } from '@mui/material';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { format, addMonths, startOfMonth, endOfMonth, getDay } from 'date-fns';
+import { useAuth } from '../AuthContext';
 
 // Reusable Summary Card Component
 interface SummaryCardProps {
@@ -84,6 +87,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, currentUser }) => {
+  const { otherUsers } = useAuth();
   const totalSavings = data.pots.reduce((sum, pot) => sum + pot.currentTotal, 0);
 
   // Calculate total recurring contributions for this month (both users)
@@ -128,9 +132,6 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
 
   // Separate pots by user
   const currentUserPots = data.pots.filter(pot => pot.userId === currentUser.id);
-  const otherUserId = currentUser.id === 'alex' ? 'beth' : 'alex';
-  const otherUserName = otherUserId === 'alex' ? 'Alex' : 'Beth';
-  const otherUserPots = data.pots.filter(pot => pot.userId === otherUserId);
 
   // Calculate next month's projected total from projections
   const potUserMap = new Map<string, string>();
@@ -139,25 +140,28 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
   });
 
   // Get projected total for next month (index 1 in projections data)
-  let nextMonthTotal = 0;
-  let nextMonthAlex = 0;
-  let nextMonthBeth = 0;
   const nextMonthDate = addMonths(new Date(), 1);
+  const nextMonthByUser = new Map<string, number>();
+  let nextMonthTotal = 0;
 
   if (projections.length > 0 && projections[0]?.data?.length > 1) {
     projections.forEach(proj => {
       const nextMonthData = proj.data[1]; // Index 1 is next month
       if (nextMonthData) {
         const userId = potUserMap.get(proj.potId);
-        if (userId === 'alex') {
-          nextMonthAlex += nextMonthData.amount;
-        } else if (userId === 'beth') {
-          nextMonthBeth += nextMonthData.amount;
+        if (userId) {
+          nextMonthByUser.set(userId, (nextMonthByUser.get(userId) || 0) + nextMonthData.amount);
         }
         nextMonthTotal += nextMonthData.amount;
       }
     });
   }
+
+  // Build sublabel with all users' projected amounts
+  const allUsers = [currentUser, ...otherUsers];
+  const nextMonthSublabel = allUsers
+    .map(u => `${u.name}: £${(nextMonthByUser.get(u.id) || 0).toLocaleString('en-GB', { minimumFractionDigits: 0 })}`)
+    .join(' · ');
 
   return (
     <Box>
@@ -186,7 +190,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
         <SummaryCard
           label={`Expected ${format(nextMonthDate, 'MMM yyyy')}`}
           value={`£${nextMonthTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          sublabel={`Alex: £${nextMonthAlex.toLocaleString('en-GB', { minimumFractionDigits: 0 })} · Beth: £${nextMonthBeth.toLocaleString('en-GB', { minimumFractionDigits: 0 })}`}
+          sublabel={nextMonthSublabel}
           icon={<TrendingUpIcon sx={{ fontSize: { xs: 14, sm: 16 }, opacity: 0.9 }} />}
           gradient
         />
@@ -225,41 +229,46 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
         </Box>
       </Box>
 
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" component="h2" gutterBottom>
-          {otherUserName}'s Accounts
-        </Typography>
-        <Box sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 3
-        }}>
-          {otherUserPots.length === 0 ? (
-            <Box sx={{ width: '100%' }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="body1" color="text.secondary" align="center">
-                    No accounts yet.
-                  </Typography>
-                </CardContent>
-              </Card>
+      {otherUsers.map(otherUser => {
+        const otherUserPots = data.pots.filter(pot => pot.userId === otherUser.id);
+        return (
+          <Box key={otherUser.id} sx={{ mb: 4 }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+              {otherUser.name}'s Accounts
+            </Typography>
+            <Box sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 3
+            }}>
+              {otherUserPots.length === 0 ? (
+                <Box sx={{ width: '100%' }}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="body1" color="text.secondary" align="center">
+                        No accounts yet.
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Box>
+              ) : (
+                otherUserPots.map(pot => (
+                  <Box key={pot.id} sx={{ minWidth: 300, flex: 1 }}>
+                    <SavingsPotCard
+                      pot={pot}
+                      onUpdate={onDataChange}
+                      currentUser={currentUser}
+                    />
+                  </Box>
+                ))
+              )}
             </Box>
-          ) : (
-            otherUserPots.map(pot => (
-              <Box key={pot.id} sx={{ minWidth: 300, flex: 1 }}>
-                <SavingsPotCard
-                  pot={pot}
-                  onUpdate={onDataChange}
-                  currentUser={currentUser}
-                />
-              </Box>
-            ))
-          )}
-        </Box>
-      </Box>
+          </Box>
+        );
+      })}
 
       {projections.length > 0 && (
-        <Box>
+        <Box sx={{ mb: 4 }}>
           <Typography variant="h5" component="h2" gutterBottom>
             Savings Projections
           </Typography>
@@ -270,6 +279,21 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
           </Card>
         </Box>
       )}
+
+      {/* Collaborative Expenses Section */}
+      <Box>
+        <Typography variant="h5" component="h2" gutterBottom>
+          Shared Expenses
+        </Typography>
+        <Box sx={{ 
+          display: 'grid', 
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, 
+          gap: 3 
+        }}>
+          <UpcomingSpends currentUser={currentUser} />
+          <RecurringExpenses currentUser={currentUser} />
+        </Box>
+      </Box>
     </Box>
   );
 };

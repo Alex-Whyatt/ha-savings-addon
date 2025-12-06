@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SavingsPot, User } from '../types';
 import { updateSavingsPot } from '../storage';
 import { Card, CardContent, Typography, Box, TextField, Button, LinearProgress, Chip } from '@mui/material';
+import { useAuth } from '../AuthContext';
 
 interface SavingsPotCardProps {
   pot: SavingsPot;
@@ -10,6 +11,7 @@ interface SavingsPotCardProps {
 }
 
 const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentUser }) => {
+  const { allUsers } = useAuth();
   // Safety check - don't render if pot is invalid
   if (!pot || typeof pot.currentTotal !== 'number') {
     console.error('Invalid pot data:', pot);
@@ -52,7 +54,7 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
             </Typography>
             {!isCurrentUser && (
               <Chip
-                label={pot.userId === 'alex' ? 'Alex' : 'Beth'}
+                label={allUsers.find(u => u.id === pot.userId)?.name || pot.userId}
                 size="small"
                 variant="outlined"
                 sx={{ fontSize: '0.7rem' }}

@@ -3,6 +3,15 @@
 bashio::log.info "Starting Savings Tracker backend..."
 # Set the database path for persistent storage
 export DATABASE_PATH=/data/savings.db
+
+# Read users configuration and pass as JSON environment variable
+if bashio::config.has_value 'users'; then
+    export SEED_USERS=$(bashio::config 'users')
+    bashio::log.info "Loaded users from configuration"
+else
+    bashio::log.warning "No users configured, using defaults"
+fi
+
 # Navigate to the backend directory
 cd /app/backend
 # Start the node server

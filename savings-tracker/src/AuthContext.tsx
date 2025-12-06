@@ -1,11 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { User } from './types';
+import { fetchUsers } from './api';
 
 // Use relative URL for production (HA ingress), absolute URL only for local dev
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "./api";
 
 interface AuthContextType {
   user: User | null;
+  allUsers: User[];
+  otherUsers: User[];
   login: (userId: string) => Promise<void>;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -27,11 +30,23 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Compute other users (all users except current user)
+  const otherUsers = useMemo(() => {
+    if (!user) return allUsers;
+    return allUsers.filter(u => u.id !== user.id);
+  }, [user, allUsers]);
+
   useEffect(() => {
-    // Check if user is already logged in
-    checkAuthStatus();
+    // Load all users and check auth status
+    const initialize = async () => {
+      const users = await fetchUsers();
+      setAllUsers(users);
+      await checkAuthStatus();
+    };
+    initialize();
   }, []);
 
   const checkAuthStatus = async () => {
@@ -105,6 +120,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const value = {
     user,
+    allUsers,
+    otherUsers,
     login,
     logout,
     isLoading,

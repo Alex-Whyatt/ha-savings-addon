@@ -4,6 +4,11 @@ import {
   Transaction,
   CreateSavingsPot,
   CreateTransaction,
+  User,
+  UpcomingSpend,
+  CreateUpcomingSpend,
+  ExpenseCategory,
+  CreateExpenseCategory,
 } from "./types";
 
 // Use relative URL for production (HA ingress), absolute URL only for local dev
@@ -37,6 +42,16 @@ async function apiRequest<T>(
 
   return response.json();
 }
+
+// Fetch all available users
+export const fetchUsers = async (): Promise<User[]> => {
+  try {
+    return await apiRequest<User[]>("/users");
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    return [];
+  }
+};
 
 // Load user-specific savings data
 export const loadSavingsData = async (): Promise<SavingsData> => {
@@ -150,6 +165,157 @@ export const deleteTransaction = async (id: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error("Error deleting transaction:", error);
+    return false;
+  }
+};
+
+// ==================== Upcoming Spends API ====================
+
+// Fetch all upcoming spends (collaborative - all users see all)
+export const fetchUpcomingSpends = async (): Promise<UpcomingSpend[]> => {
+  try {
+    const spends = await apiRequest<any[]>("/upcoming-spends");
+    return spends.map((spend) => ({
+      ...spend,
+      dueDate: spend.dueDate ? new Date(spend.dueDate) : null,
+      createdAt: new Date(spend.createdAt),
+      updatedAt: new Date(spend.updatedAt),
+    }));
+  } catch (error) {
+    console.error("Error fetching upcoming spends:", error);
+    return [];
+  }
+};
+
+// Create a new upcoming spend
+export const createUpcomingSpend = async (
+  spend: CreateUpcomingSpend
+): Promise<UpcomingSpend> => {
+  const result = await apiRequest<any>("/upcoming-spends", {
+    method: "POST",
+    body: JSON.stringify({
+      ...spend,
+      dueDate: spend.dueDate?.toISOString() || null,
+    }),
+  });
+
+  return {
+    ...result,
+    dueDate: result.dueDate ? new Date(result.dueDate) : null,
+    createdAt: new Date(result.createdAt),
+    updatedAt: new Date(result.updatedAt),
+  };
+};
+
+// Update an upcoming spend
+export const updateUpcomingSpend = async (
+  id: string,
+  updates: Partial<
+    Omit<UpcomingSpend, "id" | "userId" | "createdAt" | "updatedAt">
+  >
+): Promise<UpcomingSpend | null> => {
+  try {
+    const updateData = { ...updates };
+    if (updates.dueDate) {
+      (updateData as any).dueDate = updates.dueDate.toISOString();
+    }
+
+    const result = await apiRequest<any>(`/upcoming-spends/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(updateData),
+    });
+
+    return {
+      ...result,
+      dueDate: result.dueDate ? new Date(result.dueDate) : null,
+      createdAt: new Date(result.createdAt),
+      updatedAt: new Date(result.updatedAt),
+    };
+  } catch (error) {
+    console.error("Error updating upcoming spend:", error);
+    return null;
+  }
+};
+
+// Delete an upcoming spend
+export const deleteUpcomingSpend = async (id: string): Promise<boolean> => {
+  try {
+    await apiRequest(`/upcoming-spends/${id}`, {
+      method: "DELETE",
+    });
+    return true;
+  } catch (error) {
+    console.error("Error deleting upcoming spend:", error);
+    return false;
+  }
+};
+
+// ==================== Expense Categories API ====================
+
+// Fetch all expense categories (collaborative - all users see all)
+export const fetchExpenseCategories = async (): Promise<ExpenseCategory[]> => {
+  try {
+    const categories = await apiRequest<any[]>("/expense-categories");
+    return categories.map((cat) => ({
+      ...cat,
+      createdAt: new Date(cat.createdAt),
+      updatedAt: new Date(cat.updatedAt),
+    }));
+  } catch (error) {
+    console.error("Error fetching expense categories:", error);
+    return [];
+  }
+};
+
+// Create a new expense category
+export const createExpenseCategory = async (
+  category: CreateExpenseCategory
+): Promise<ExpenseCategory> => {
+  const result = await apiRequest<any>("/expense-categories", {
+    method: "POST",
+    body: JSON.stringify(category),
+  });
+
+  return {
+    ...result,
+    createdAt: new Date(result.createdAt),
+    updatedAt: new Date(result.updatedAt),
+  };
+};
+
+// Update an expense category
+export const updateExpenseCategory = async (
+  id: string,
+  updates: Partial<
+    Omit<ExpenseCategory, "id" | "userId" | "createdAt" | "updatedAt">
+  >
+): Promise<ExpenseCategory | null> => {
+  try {
+    const result = await apiRequest<any>(`/expense-categories/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    });
+
+    return {
+      ...result,
+      createdAt: new Date(result.createdAt),
+      updatedAt: new Date(result.updatedAt),
+    };
+  } catch (error) {
+    console.error("Error updating expense category:", error);
+    return null;
+  }
+};
+
+// Delete an expense category
+export const deleteExpenseCategory = async (id: string): Promise<boolean> => {
+  try {
+    await apiRequest(`/expense-categories/${id}`, {
+      method: "DELETE",
+    });
+    return true;
+  } catch (error) {
+    console.error("Error deleting expense category:", error);
     return false;
   }
 };

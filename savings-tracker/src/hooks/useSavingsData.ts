@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { SavingsData, SavingsProjection } from "../types";
+import { useState, useEffect, useRef } from "react";
+import { SavingsData, SavingsProjection, User } from "../types";
 import { loadSavingsData, loadSavingsDataForUser } from "../storage";
 import { calculateAllProjections } from "../projections";
 
@@ -12,7 +12,10 @@ interface UseSavingsDataResult {
   refreshData: () => Promise<void>;
 }
 
-export const useSavingsData = (userId: string | null): UseSavingsDataResult => {
+export const useSavingsData = (
+  userId: string | null,
+  otherUsers: User[] = []
+): UseSavingsDataResult => {
   const [data, setData] = useState<SavingsData>({ pots: [], transactions: [] });
   const [combinedData, setCombinedData] = useState<SavingsData>({
     pots: [],
@@ -22,7 +25,11 @@ export const useSavingsData = (userId: string | null): UseSavingsDataResult => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadDataForUser = async (user: string) => {
+  // Keep a ref to otherUsers for use in refreshData
+  const otherUsersRef = useRef(otherUsers);
+  otherUsersRef.current = otherUsers;
+
+  const loadDataForUser = async (user: string, others: User[]) => {
     try {
       setError(null);
       setIsLoading(true);
@@ -32,19 +39,23 @@ export const useSavingsData = (userId: string | null): UseSavingsDataResult => {
       console.log("Loaded user's own data:", savingsData);
       setData(savingsData);
 
-      // Load the other user's data
-      const otherUserId = user === "alex" ? "beth" : "alex";
-      console.log("Loading other user's data for:", otherUserId);
-      const otherUserData = await loadSavingsDataForUser(otherUserId);
-      console.log("Loaded other user's data:", otherUserData);
+      // Load all other users' data
+      const otherUsersData = await Promise.all(
+        others.map(async (otherUser) => {
+          console.log("Loading other user's data for:", otherUser.id);
+          return loadSavingsDataForUser(otherUser.id);
+        })
+      );
 
-      // Combine the data
+      // Combine all data
+      const allOtherPots = otherUsersData.flatMap((d) => d.pots);
+      const allOtherTransactions = otherUsersData.flatMap(
+        (d) => d.transactions
+      );
+
       const combinedDataObj = {
-        pots: [...savingsData.pots, ...otherUserData.pots],
-        transactions: [
-          ...savingsData.transactions,
-          ...otherUserData.transactions,
-        ],
+        pots: [...savingsData.pots, ...allOtherPots],
+        transactions: [...savingsData.transactions, ...allOtherTransactions],
       };
       console.log("Combined data pots:", combinedDataObj.pots);
       setCombinedData(combinedDataObj);
@@ -62,15 +73,15 @@ export const useSavingsData = (userId: string | null): UseSavingsDataResult => {
 
   const refreshData = async () => {
     if (userId) {
-      await loadDataForUser(userId);
+      await loadDataForUser(userId, otherUsersRef.current);
     }
   };
 
   useEffect(() => {
     if (userId) {
-      loadDataForUser(userId);
+      loadDataForUser(userId, otherUsers);
     }
-  }, [userId]);
+  }, [userId, otherUsers.length]);
 
   return {
     data,

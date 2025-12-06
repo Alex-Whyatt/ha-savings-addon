@@ -7,6 +7,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SavingsIcon from '@mui/icons-material/Savings';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
+import { useAuth } from '../AuthContext';
 
 interface ProjectionChartProps {
   projections: SavingsProjection[];
@@ -16,15 +17,22 @@ interface ProjectionChartProps {
 interface ChartDataPoint {
   date: string;
   fullDate: Date;
-  alex: number;
-  beth: number;
+  byUser: Record<string, number>;
   total: number;
   isProjected: boolean;
 }
 
-const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload, label }) => {
+// Colors for different users in the tooltip
+const userColors = ['#2196f3', '#e91e63', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+
+interface CustomTooltipProps extends TooltipProps<number, string> {
+  userNames: Record<string, string>;
+}
+
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, userNames }) => {
   if (active && payload && payload.length > 0) {
     const data = payload[0].payload as ChartDataPoint;
+    const userIds = Object.keys(data.byUser);
     
     return (
       <div style={{
@@ -43,12 +51,11 @@ const CustomTooltip: React.FC<TooltipProps<number, string>> = ({ active, payload
         }}>
           {label} {data.isProjected && <span style={{ color: '#667eea', fontSize: '0.85em' }}>(Projected)</span>}
         </p>
-        <p style={{ margin: '4px 0', color: '#2196f3' }}>
-          Alex: £{data.alex.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </p>
-        <p style={{ margin: '4px 0', color: '#e91e63' }}>
-          Beth: £{data.beth.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </p>
+        {userIds.map((userId, index) => (
+          <p key={userId} style={{ margin: '4px 0', color: userColors[index % userColors.length] }}>
+            {userNames[userId] || userId}: £{(data.byUser[userId] || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+        ))}
         <p style={{ 
           margin: '8px 0 0 0', 
           fontWeight: 'bold',
@@ -142,40 +149,51 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, sublabel, color
 const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { allUsers } = useAuth();
 
-  // Create a map of potId to userId for quick lookup
+  // Create maps for quick lookup
   const potUserMap = new Map<string, string>();
   pots.forEach(pot => {
     potUserMap.set(pot.id, pot.userId);
   });
 
+  const userNames: Record<string, string> = {};
+  allUsers.forEach(user => {
+    userNames[user.id] = user.name;
+  });
+
+  // Get unique user IDs from pots
+  const userIds = [...new Set(pots.map(pot => pot.userId))];
+
   const currentDate = startOfDay(new Date());
 
   // Combine all projections into chart data with per-user breakdown
   const chartData: ChartDataPoint[] = projections[0]?.data.map((point, index) => {
-    let alexTotal = 0;
-    let bethTotal = 0;
+    const byUser: Record<string, number> = {};
+    
+    // Initialize all users to 0
+    userIds.forEach(userId => {
+      byUser[userId] = 0;
+    });
 
     projections.forEach(proj => {
       const potData = proj.data[index];
       if (potData) {
         const userId = potUserMap.get(proj.potId);
-        if (userId === 'alex') {
-          alexTotal += potData.amount;
-        } else if (userId === 'beth') {
-          bethTotal += potData.amount;
+        if (userId) {
+          byUser[userId] = (byUser[userId] || 0) + potData.amount;
         }
       }
     });
 
+    const total = Object.values(byUser).reduce((sum, val) => sum + val, 0);
     const isProjected = isAfter(startOfDay(point.date), currentDate);
 
     return {
       date: format(point.date, 'MMM yyyy'),
       fullDate: point.date,
-      alex: alexTotal,
-      beth: bethTotal,
-      total: alexTotal + bethTotal,
+      byUser,
+      total,
       isProjected
     };
   }) || [];
@@ -188,8 +206,10 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
   // fully-projected months (this gives the true recurring monthly amount)
   const projectedMonths = chartData.filter(d => d.isProjected);
   let monthlyContribution = 0;
-  let alexMonthlyContribution = 0;
-  let bethMonthlyContribution = 0;
+  const monthlyContributionByUser: Record<string, number> = {};
+  userIds.forEach(userId => {
+    monthlyContributionByUser[userId] = 0;
+  });
   
   if (projectedMonths.length >= 2) {
     // Use the change between month 2 and month 3 of projections (both are full months)
@@ -197,14 +217,30 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
     const idx = Math.min(2, projectedMonths.length - 1);
     const prevIdx = idx - 1;
     monthlyContribution = projectedMonths[idx].total - projectedMonths[prevIdx].total;
-    alexMonthlyContribution = projectedMonths[idx].alex - projectedMonths[prevIdx].alex;
-    bethMonthlyContribution = projectedMonths[idx].beth - projectedMonths[prevIdx].beth;
+    userIds.forEach(userId => {
+      monthlyContributionByUser[userId] = 
+        (projectedMonths[idx].byUser[userId] || 0) - (projectedMonths[prevIdx].byUser[userId] || 0);
+    });
   } else if (projectedMonths.length === 1 && chartData.length >= 2) {
     // Fallback: use difference from current to first projected
     monthlyContribution = projectedMonths[0].total - currentTotal;
-    alexMonthlyContribution = projectedMonths[0].alex - (chartData[0]?.alex || 0);
-    bethMonthlyContribution = projectedMonths[0].beth - (chartData[0]?.beth || 0);
+    userIds.forEach(userId => {
+      monthlyContributionByUser[userId] = 
+        (projectedMonths[0].byUser[userId] || 0) - (chartData[0]?.byUser[userId] || 0);
+    });
   }
+
+  const formatCurrency = (value: number) => {
+    if (value >= 1000) {
+      return `£${(value / 1000).toFixed(1)}k`;
+    }
+    return `£${value.toFixed(0)}`;
+  };
+
+  // Build sublabel for monthly savings
+  const monthlySublabel = userIds
+    .map(userId => `${userNames[userId] || userId}: ${formatCurrency(monthlyContributionByUser[userId] || 0)}`)
+    .join(' · ');
   
   // Calculate yearly growth
   const yearlyGrowth = projectedIn12Months - currentTotal;
@@ -216,13 +252,6 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
   const chartMargins = isMobile 
     ? { top: 10, right: 10, left: -10, bottom: 5 }
     : { top: 10, right: 30, left: 10, bottom: 5 };
-
-  const formatCurrency = (value: number) => {
-    if (value >= 1000) {
-      return `£${(value / 1000).toFixed(1)}k`;
-    }
-    return `£${value.toFixed(0)}`;
-  };
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -242,7 +271,7 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
               tick={{ fontSize: isMobile ? 10 : 12 }}
               width={isMobile ? 45 : 60}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip userNames={userNames} />} />
             <Legend 
               wrapperStyle={{ 
                 fontSize: isMobile ? '12px' : '14px',
@@ -288,7 +317,7 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
           icon={<CalendarMonthIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
           label="Monthly Savings"
           value={formatCurrency(monthlyContribution)}
-          sublabel={`Alex: ${formatCurrency(alexMonthlyContribution)} · Beth: ${formatCurrency(bethMonthlyContribution)}`}
+          sublabel={monthlySublabel}
           color="#4facfe"
         />
         <StatCard

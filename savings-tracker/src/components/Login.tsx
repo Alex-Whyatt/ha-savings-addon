@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Button, Card, CardContent, Typography, Box, Alert } from '@mui/material';
+import { Button, Card, CardContent, Typography, Box, Alert, CircularProgress } from '@mui/material';
 import { useAuth } from '../AuthContext';
 
 const Login: React.FC = () => {
-  const { login } = useAuth();
+  const { login, allUsers, isLoading: isAuthLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,25 +48,28 @@ const Login: React.FC = () => {
           )}
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => handleLogin('alex')}
-              disabled={isLoading}
-              sx={{ py: 1.5 }}
-            >
-              {isLoading ? 'Signing in...' : 'Sign in as Alex'}
-            </Button>
-
-            <Button
-              variant="contained"
-              size="large"
-              onClick={() => handleLogin('beth')}
-              disabled={isLoading}
-              sx={{ py: 1.5 }}
-            >
-              {isLoading ? 'Signing in...' : 'Sign in as Beth'}
-            </Button>
+            {isAuthLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress />
+              </Box>
+            ) : allUsers.length === 0 ? (
+              <Alert severity="warning">
+                No users configured. Please add users in the add-on configuration.
+              </Alert>
+            ) : (
+              allUsers.map(user => (
+                <Button
+                  key={user.id}
+                  variant="contained"
+                  size="large"
+                  onClick={() => handleLogin(user.id)}
+                  disabled={isLoading}
+                  sx={{ py: 1.5 }}
+                >
+                  {isLoading ? 'Signing in...' : `Sign in as ${user.name}`}
+                </Button>
+              ))
+            )}
           </Box>
         </CardContent>
       </Card>

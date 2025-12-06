@@ -55,3 +55,37 @@ export interface SavingsData {
   pots: SavingsPot[];
   transactions: Transaction[];
 }
+
+export interface UpcomingSpend {
+  id: string;
+  userId: string;
+  name: string;
+  amount: number;
+  dueDate?: Date | null;
+  isRecurring: boolean;
+  recurrenceInterval?: string | null;
+  categoryId?: string | null;
+  completed: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type CreateUpcomingSpend = Omit<
+  UpcomingSpend,
+  "id" | "userId" | "completed" | "createdAt" | "updatedAt"
+>;
+
+export interface ExpenseCategory {
+  id: string;
+  userId: string;
+  name: string;
+  color: string;
+  icon?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type CreateExpenseCategory = Omit<
+  ExpenseCategory,
+  "id" | "userId" | "createdAt" | "updatedAt"
+>;

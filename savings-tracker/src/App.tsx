@@ -37,9 +37,9 @@ const theme = createTheme({
 });
 
 const AppContent: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, otherUsers } = useAuth();
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
-  const { data, combinedData, projections, refreshData } = useSavingsData(user?.id || null);
+  const { data, combinedData, projections, refreshData } = useSavingsData(user?.id || null, otherUsers);
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   if (!user) {
@@ -251,7 +251,9 @@ const AppContent: React.FC = () => {
         {currentView === 'calendar' && (
           <Calendar
             data={data}
+            combinedData={combinedData}
             onDataChange={refreshData}
+            currentUser={user}
           />
         )}
         {currentView === 'pots' && (

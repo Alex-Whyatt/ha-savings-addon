@@ -36,7 +36,28 @@ You can also access it directly via: `http://your-ha-ip:8123/api/hassio_ingress/
 
 ## ⚙️ Configuration
 
-No configuration is required. The add-on automatically:
+### Users
+
+Configure the household members who will use the savings tracker. In Home Assistant, go to **Settings** → **Add-ons** → **Savings Tracker** → **Configuration** and set:
+
+```yaml
+users:
+  - id: "john"
+    name: "John"
+  - id: "jane"
+    name: "Jane"
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique identifier for the user (lowercase, no spaces) |
+| `name` | Display name shown in the app |
+
+**Note**: Changing the configuration will add new users on restart but **will not remove existing users** or their data. This ensures your savings history is preserved.
+
+### Automatic Setup
+
+The add-on automatically:
 
 - Creates a persistent SQLite database in `/config/savings-tracker/`
 - Sets up the web interface on the configured port

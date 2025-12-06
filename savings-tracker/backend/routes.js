@@ -13,6 +13,17 @@ router.get('/test', (req, res) => {
   res.json({ message: 'API is working!', timestamp: new Date().toISOString() });
 });
 
+// Get all available users (for login screen)
+router.get('/users', async (req, res) => {
+  try {
+    const users = await getAllRows('SELECT id, name FROM users ORDER BY name ASC');
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Authentication middleware
 const requireAuth = (req, res, next) => {
   const sessionId = req.headers.authorization;
@@ -34,7 +45,7 @@ router.post('/login', async (req, res) => {
     const { userId } = req.body;
     console.log('🔑 Login attempt for userId:', userId);
 
-    if (!userId || !['alex', 'beth'].includes(userId)) {
+    if (!userId) {
       console.log('❌ Invalid user ID');
       return res.status(400).json({ error: 'Invalid user' });
     }
@@ -89,8 +100,11 @@ router.get('/admin/user/:userId/data', requireAuth, async (req, res) => {
 
     console.log('🔍 Admin data request for userId:', userId, 'by requestingUser:', requestingUser);
 
-    // Only allow Alex and Beth to access each other's data
-    if (!['alex', 'beth'].includes(userId) || !['alex', 'beth'].includes(requestingUser.id)) {
+    // Verify both the requesting user and target user exist in the database
+    const targetUser = await getRow('SELECT id FROM users WHERE id = ?', [userId]);
+    const reqUser = await getRow('SELECT id FROM users WHERE id = ?', [requestingUser.id]);
+    
+    if (!targetUser || !reqUser) {
       console.log('❌ Access denied for userId:', userId, 'requestingUser:', requestingUser.id);
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -472,6 +486,277 @@ router.delete('/transactions/:id', requireAuth, async (req, res) => {
     res.json({ message: 'Transaction deleted successfully' });
   } catch (error) {
     console.error('Error deleting transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==================== Upcoming Spends Routes ====================
+// All users can see all upcoming spends (collaborative feature)
+
+// Get all upcoming spends (all users can see all)
+router.get('/upcoming-spends', requireAuth, async (req, res) => {
+  try {
+    const spends = await getAllRows(
+      'SELECT * FROM upcoming_spends ORDER BY due_date ASC, created_at DESC'
+    );
+    
+    const formattedSpends = spends.map(spend => ({
+      id: spend.id,
+      userId: spend.user_id,
+      name: spend.name,
+      amount: spend.amount,
+      dueDate: spend.due_date ? new Date(spend.due_date) : null,
+      isRecurring: spend.is_recurring === 1,
+      recurrenceInterval: spend.recurrence_interval,
+      categoryId: spend.category_id,
+      completed: spend.completed === 1,
+      createdAt: new Date(spend.created_at),
+      updatedAt: new Date(spend.updated_at)
+    }));
+    
+    res.json(formattedSpends);
+  } catch (error) {
+    console.error('Error fetching upcoming spends:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new upcoming spend
+router.post('/upcoming-spends', requireAuth, async (req, res) => {
+  try {
+    const { name, amount, dueDate, isRecurring, recurrenceInterval, categoryId } = req.body;
+    const userId = req.user.id;
+
+    if (!name || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'Name and valid amount are required' });
+    }
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    await runQuery(
+      `INSERT INTO upcoming_spends (id, user_id, name, amount, due_date, is_recurring, recurrence_interval, category_id, completed, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      [id, userId, name, amount, dueDate || null, isRecurring ? 1 : 0, recurrenceInterval || null, categoryId || null, now, now]
+    );
+
+    const spend = await getRow('SELECT * FROM upcoming_spends WHERE id = ?', [id]);
+    
+    res.status(201).json({
+      id: spend.id,
+      userId: spend.user_id,
+      name: spend.name,
+      amount: spend.amount,
+      dueDate: spend.due_date ? new Date(spend.due_date) : null,
+      isRecurring: spend.is_recurring === 1,
+      recurrenceInterval: spend.recurrence_interval,
+      categoryId: spend.category_id,
+      completed: spend.completed === 1,
+      createdAt: new Date(spend.created_at),
+      updatedAt: new Date(spend.updated_at)
+    });
+  } catch (error) {
+    console.error('Error creating upcoming spend:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update an upcoming spend (only owner can update)
+router.put('/upcoming-spends/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, amount, dueDate, isRecurring, recurrenceInterval, categoryId, completed } = req.body;
+    const userId = req.user.id;
+
+    const existingSpend = await getRow('SELECT * FROM upcoming_spends WHERE id = ? AND user_id = ?', [id, userId]);
+    if (!existingSpend) {
+      return res.status(404).json({ error: 'Upcoming spend not found or not authorized' });
+    }
+
+    const now = new Date().toISOString();
+
+    await runQuery(
+      `UPDATE upcoming_spends SET 
+        name = ?, amount = ?, due_date = ?, is_recurring = ?, recurrence_interval = ?, category_id = ?, completed = ?, updated_at = ?
+       WHERE id = ?`,
+      [
+        name !== undefined ? name : existingSpend.name,
+        amount !== undefined ? amount : existingSpend.amount,
+        dueDate !== undefined ? dueDate : existingSpend.due_date,
+        isRecurring !== undefined ? (isRecurring ? 1 : 0) : existingSpend.is_recurring,
+        recurrenceInterval !== undefined ? recurrenceInterval : existingSpend.recurrence_interval,
+        categoryId !== undefined ? categoryId : existingSpend.category_id,
+        completed !== undefined ? (completed ? 1 : 0) : existingSpend.completed,
+        now,
+        id
+      ]
+    );
+
+    const updatedSpend = await getRow('SELECT * FROM upcoming_spends WHERE id = ?', [id]);
+    
+    res.json({
+      id: updatedSpend.id,
+      userId: updatedSpend.user_id,
+      name: updatedSpend.name,
+      amount: updatedSpend.amount,
+      dueDate: updatedSpend.due_date ? new Date(updatedSpend.due_date) : null,
+      isRecurring: updatedSpend.is_recurring === 1,
+      recurrenceInterval: updatedSpend.recurrence_interval,
+      categoryId: updatedSpend.category_id,
+      completed: updatedSpend.completed === 1,
+      createdAt: new Date(updatedSpend.created_at),
+      updatedAt: new Date(updatedSpend.updated_at)
+    });
+  } catch (error) {
+    console.error('Error updating upcoming spend:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete an upcoming spend (only owner can delete)
+router.delete('/upcoming-spends/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const spend = await getRow('SELECT * FROM upcoming_spends WHERE id = ? AND user_id = ?', [id, userId]);
+    if (!spend) {
+      return res.status(404).json({ error: 'Upcoming spend not found or not authorized' });
+    }
+
+    await runQuery('DELETE FROM upcoming_spends WHERE id = ?', [id]);
+
+    res.json({ message: 'Upcoming spend deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting upcoming spend:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==================== Expense Categories Routes ====================
+// All users can see all categories (collaborative feature)
+
+// Get all expense categories
+router.get('/expense-categories', requireAuth, async (req, res) => {
+  try {
+    const categories = await getAllRows(
+      'SELECT * FROM expense_categories ORDER BY name ASC'
+    );
+    
+    const formattedCategories = categories.map(cat => ({
+      id: cat.id,
+      userId: cat.user_id,
+      name: cat.name,
+      color: cat.color,
+      icon: cat.icon,
+      createdAt: new Date(cat.created_at),
+      updatedAt: new Date(cat.updated_at)
+    }));
+    
+    res.json(formattedCategories);
+  } catch (error) {
+    console.error('Error fetching expense categories:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new expense category
+router.post('/expense-categories', requireAuth, async (req, res) => {
+  try {
+    const { name, color, icon } = req.body;
+    const userId = req.user.id;
+
+    if (!name || !color) {
+      return res.status(400).json({ error: 'Name and color are required' });
+    }
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    await runQuery(
+      `INSERT INTO expense_categories (id, user_id, name, color, icon, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, name, color, icon || null, now, now]
+    );
+
+    const category = await getRow('SELECT * FROM expense_categories WHERE id = ?', [id]);
+    
+    res.status(201).json({
+      id: category.id,
+      userId: category.user_id,
+      name: category.name,
+      color: category.color,
+      icon: category.icon,
+      createdAt: new Date(category.created_at),
+      updatedAt: new Date(category.updated_at)
+    });
+  } catch (error) {
+    console.error('Error creating expense category:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update an expense category (only owner can update)
+router.put('/expense-categories/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, color, icon } = req.body;
+    const userId = req.user.id;
+
+    const existingCategory = await getRow('SELECT * FROM expense_categories WHERE id = ? AND user_id = ?', [id, userId]);
+    if (!existingCategory) {
+      return res.status(404).json({ error: 'Category not found or not authorized' });
+    }
+
+    const now = new Date().toISOString();
+
+    await runQuery(
+      `UPDATE expense_categories SET name = ?, color = ?, icon = ?, updated_at = ? WHERE id = ?`,
+      [
+        name !== undefined ? name : existingCategory.name,
+        color !== undefined ? color : existingCategory.color,
+        icon !== undefined ? icon : existingCategory.icon,
+        now,
+        id
+      ]
+    );
+
+    const updatedCategory = await getRow('SELECT * FROM expense_categories WHERE id = ?', [id]);
+    
+    res.json({
+      id: updatedCategory.id,
+      userId: updatedCategory.user_id,
+      name: updatedCategory.name,
+      color: updatedCategory.color,
+      icon: updatedCategory.icon,
+      createdAt: new Date(updatedCategory.created_at),
+      updatedAt: new Date(updatedCategory.updated_at)
+    });
+  } catch (error) {
+    console.error('Error updating expense category:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete an expense category (only owner can delete)
+router.delete('/expense-categories/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const category = await getRow('SELECT * FROM expense_categories WHERE id = ? AND user_id = ?', [id, userId]);
+    if (!category) {
+      return res.status(404).json({ error: 'Category not found or not authorized' });
+    }
+
+    // Set category_id to null for any spends using this category
+    await runQuery('UPDATE upcoming_spends SET category_id = NULL WHERE category_id = ?', [id]);
+
+    await runQuery('DELETE FROM expense_categories WHERE id = ?', [id]);
+
+    res.json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting expense category:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
