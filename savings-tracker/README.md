@@ -1,103 +1,152 @@
-# Savings Tracker Home Assistant Add-on
+# Savings Tracker — Home Assistant Add-on
 
-A modern, web-based savings tracker that integrates seamlessly with Home Assistant.
+A modern, mobile-friendly savings tracker that runs directly on your Home Assistant system. Track multiple savings accounts, set goals, and visualise your progress with beautiful projections.
 
-## Features
+## ✨ Features
 
-- 📊 **Dashboard Overview**: See all your savings pots and total savings at a glance
-- 📅 **Calendar View**: Add savings transactions to specific dates
-- 🎯 **Savings Pots**: Create and manage multiple savings goals
-- 📈 **Projections**: Visualize savings growth over time
-- 💾 **Persistent Storage**: SQLite database stores data on your Home Assistant system
-- 🔒 **Secure**: Runs locally on your Home Assistant system
+- 📊 **Dashboard** — Overview of all savings with combined household totals
+- 📅 **Calendar** — Add transactions to specific dates with recurring support
+- 💰 **Accounts** — Manage multiple savings accounts (ISAs, bonds, investments, etc.)
+- 📈 **Projections** — 12-month forecasting with monthly breakdown
+- 👥 **Multi-user** — Track savings for multiple household members
+- 📱 **Mobile-first** — Responsive design with bottom navigation on mobile
+- 🔒 **Private** — All data stays on your Home Assistant system
 
-## Installation
+## 📦 Installation
 
 ### Step 1: Add the Repository
 
-1. In Home Assistant, go to **Settings** → **Add-ons** → **Add-on Store**
+1. In Home Assistant, navigate to **Settings** → **Add-ons** → **Add-on Store**
 2. Click the **⋮** menu (three dots) in the top-right corner
 3. Select **Repositories**
-4. Add this URL: `https://github.com/your-username/ha-savings-tracker`
-5. Click **Add**
+4. Add the repository URL and click **Add**
 
 ### Step 2: Install the Add-on
 
 1. Find "Savings Tracker" in the add-on store
 2. Click **Install**
 3. Wait for the installation to complete
-4. Click **Start** to start the add-on
+4. Click **Start** to launch the add-on
 
 ### Step 3: Access the App
 
-The app will be available through the Home Assistant sidebar under "Savings Tracker".
+The app will appear in your Home Assistant sidebar as "Savings Tracker".
 
-Alternatively, you can access it directly at: `http://your-ha-ip:8123/api/hassio_ingress/your-addon-slug/`
+You can also access it directly via: `http://your-ha-ip:8123/api/hassio_ingress/[addon-slug]/`
 
-## Configuration
+## ⚙️ Configuration
 
-No configuration is required. The add-on will automatically:
+No configuration is required. The add-on automatically:
 
-- Create a persistent SQLite database in `/config/savings-tracker/`
-- Set up the web interface
-- Configure ingress routing
+- Creates a persistent SQLite database in `/config/savings-tracker/`
+- Sets up the web interface on the configured port
+- Configures ingress routing for seamless Home Assistant integration
 
-## Data Storage
+### Data Storage
 
-- SQLite database: `/config/savings-tracker/savings.db`
-- All data persists between add-on restarts
-- Automatic backups through Home Assistant's backup system
+| Item | Location |
+|------|----------|
+| Database | `/config/savings-tracker/savings.db` |
+| Persistence | Data survives restarts and updates |
+| Backups | Included in Home Assistant backups |
 
-## API Endpoints
+## 🖥️ Using the App
 
-The add-on provides a REST API at `/api/`:
+### Dashboard
+Your main overview showing:
+- Total combined savings across all accounts
+- Your accounts and your partner's accounts
+- Savings projection chart with 12-month forecast
+- Key stats: current total, monthly contributions, yearly growth
 
-- `GET /api/data` - Get all savings data
-- `GET/POST/PUT/DELETE /api/pots` - Manage savings pots
-- `GET/POST/PUT/DELETE /api/transactions` - Manage transactions
+### Calendar
+- Click any date to add a transaction
+- Set transactions as **monthly** or **weekly** recurring
+- View all transactions for each day
+- Edit or delete existing entries
 
-## Troubleshooting
+### Accounts
+- Create accounts for different savings types (Cash ISA, S&S ISA, NS&I Bonds, etc.)
+- Set optional savings targets with progress tracking
+- Customise colours for easy identification
+- View totals and goal completion percentages
+
+## 📡 API Endpoints
+
+The add-on provides a REST API for advanced integrations:
+
+```
+GET  /api/data              — All savings data
+GET  /api/user/data         — Current user's data
+GET  /api/pots              — List all accounts
+POST /api/pots              — Create new account
+PUT  /api/pots/:id          — Update account
+DELETE /api/pots/:id        — Delete account
+GET  /api/transactions      — List all transactions
+POST /api/transactions      — Create transaction
+PUT  /api/transactions/:id  — Update transaction
+DELETE /api/transactions/:id — Delete transaction
+```
+
+## 🔍 Troubleshooting
 
 ### Add-on Won't Start
 
-1. Check the Home Assistant logs: **Settings** → **System** → **Logs**
-2. Look for errors related to the savings-tracker add-on
-3. Ensure you have sufficient disk space
+1. Check the logs: **Settings** → **System** → **Logs**
+2. Filter by "Savings Tracker" to see relevant entries
+3. Ensure you have sufficient disk space (at least 100MB free)
+4. Try restarting the add-on
 
-### Can't Access the Interface
+### Cannot Access the Interface
 
-1. Verify the add-on is running (green status)
-2. Check that ingress is enabled
-3. Try refreshing the page or clearing browser cache
+1. Verify the add-on is running (green status indicator)
+2. Check that "Show in sidebar" is enabled in add-on settings
+3. Try refreshing the page or clearing your browser cache
+4. Ensure ingress is enabled
 
 ### Data Not Saving
 
-1. Check the database file exists: `/config/savings-tracker/savings.db`
-2. Verify the add-on has write permissions to `/config`
-3. Check Home Assistant logs for database errors
+1. Verify the database file exists: `/config/savings-tracker/savings.db`
+2. Check the add-on has write permissions to `/config`
+3. Review Home Assistant logs for database-related errors
+4. Try restarting the add-on
 
-## Development
+### Interface Looks Broken
 
-### Local Testing
+1. Clear your browser cache (Ctrl+Shift+R or Cmd+Shift+R)
+2. Try a different browser
+3. Check the add-on logs for JavaScript errors
 
-To test the add-on locally before publishing:
+## 🔄 Updates
 
-```bash
-# Build the Docker image
-docker build -t savings-tracker:test ./ha-addon/savings-tracker
+The add-on will show available updates in the Home Assistant add-on store. Updates preserve your data — only the application code is replaced.
 
-# Run the container
-docker run -p 3001:3001 -v $(pwd)/data:/data savings-tracker:test
-```
+## 🛡️ Security
 
-### Publishing
+- All data is stored locally on your Home Assistant system
+- No external connections or cloud dependencies
+- Authentication handled through Home Assistant's ingress system
+- Database is only accessible within the add-on container
 
-1. Push your repository to GitHub
-2. Update the repository URL in the add-on configuration
-3. Users can then add your repository URL to install the add-on
+## 💡 Tips
 
-## Support
+- **Recurring transactions**: Set up monthly standing orders to automatically project future savings
+- **Colour coding**: Use different colours for different account types (e.g., blue for ISAs, green for investments)
+- **Goals**: Set realistic targets to track progress towards specific savings milestones
+- **Regular updates**: Log transactions regularly for accurate projections
 
-- Create an issue on the GitHub repository
-- Check Home Assistant community forums
-- Review the troubleshooting section above
+## 🆘 Support
+
+If you encounter issues:
+
+1. Check the troubleshooting section above
+2. Review the Home Assistant logs for errors
+3. Create an issue on the GitHub repository with:
+   - Your Home Assistant version
+   - Add-on version
+   - Steps to reproduce the issue
+   - Relevant log entries
+
+## 📄 Licence
+
+MIT Licence — free to use, modify, and distribute.
