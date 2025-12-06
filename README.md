@@ -57,7 +57,7 @@ The app features a modern, mobile-first design with:
 1. **Add the repository** to your Home Assistant add-on store:
    - Go to **Settings** → **Add-ons** → **Add-on Store**
    - Click the **⋮** menu → **Repositories**
-   - Add: `https://github.com/yourusername/savings-tracker`
+   - Add: `https://github.com/Alex-Whyatt/savings-tracker`
 
 2. **Install the add-on**:
    - Find "Savings Tracker" in the add-on store
@@ -71,7 +71,7 @@ The app features a modern, mobile-first design with:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/savings-tracker.git
+git clone https://github.com/Alex-Whyatt/savings-tracker.git
 cd savings-tracker/savings-tracker
 
 # Build and run with Docker
