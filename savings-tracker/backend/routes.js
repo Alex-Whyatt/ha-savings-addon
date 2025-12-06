@@ -121,6 +121,7 @@ router.get('/admin/user/:userId/data', requireAuth, async (req, res) => {
       currentTotal: pot.current_total,
       targetAmount: pot.target_amount,
       color: pot.color,
+      interestRate: pot.interest_rate,
       createdAt: new Date(pot.created_at),
       updatedAt: new Date(pot.updated_at)
     }));
@@ -164,6 +165,7 @@ router.get('/user/data', requireAuth, async (req, res) => {
       currentTotal: pot.current_total,
       targetAmount: pot.target_amount,
       color: pot.color,
+      interestRate: pot.interest_rate,
       createdAt: new Date(pot.created_at),
       updatedAt: new Date(pot.updated_at)
     }));
@@ -198,14 +200,25 @@ router.get('/data', async (req, res) => {
 
     // Convert date strings back to Date objects for consistency
     const formattedPots = pots.map(pot => ({
-      ...pot,
+      id: pot.id,
+      userId: pot.user_id,
+      name: pot.name,
+      description: pot.description,
+      currentTotal: pot.current_total,
+      targetAmount: pot.target_amount,
+      color: pot.color,
+      interestRate: pot.interest_rate,
       createdAt: new Date(pot.created_at),
       updatedAt: new Date(pot.updated_at)
     }));
 
     const formattedTransactions = transactions.map(transaction => ({
-      ...transaction,
+      id: transaction.id,
+      userId: transaction.user_id,
+      potId: transaction.pot_id,
+      amount: transaction.amount,
       date: new Date(transaction.date),
+      description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
       repeatWeekly: transaction.repeat_weekly === 1,
       createdAt: new Date(transaction.created_at)
@@ -227,7 +240,14 @@ router.get('/pots', requireAuth, async (req, res) => {
     const userId = req.user.id;
     const pots = await getAllRows('SELECT * FROM savings_pots WHERE user_id = ? ORDER BY created_at DESC', [userId]);
     const formattedPots = pots.map(pot => ({
-      ...pot,
+      id: pot.id,
+      userId: pot.user_id,
+      name: pot.name,
+      description: pot.description,
+      currentTotal: pot.current_total,
+      targetAmount: pot.target_amount,
+      color: pot.color,
+      interestRate: pot.interest_rate,
       createdAt: new Date(pot.created_at),
       updatedAt: new Date(pot.updated_at)
     }));
@@ -240,7 +260,7 @@ router.get('/pots', requireAuth, async (req, res) => {
 
 router.post('/pots', requireAuth, async (req, res) => {
   try {
-    const { name, description, currentTotal, targetAmount, color } = req.body;
+    const { name, description, currentTotal, targetAmount, color, interestRate } = req.body;
     const userId = req.user.id;
 
     if (!name || typeof currentTotal !== 'number' || !color) {
@@ -251,8 +271,8 @@ router.post('/pots', requireAuth, async (req, res) => {
     const now = new Date().toISOString();
 
     await runQuery(
-      'INSERT INTO savings_pots (id, user_id, name, description, current_total, target_amount, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, userId, name, description || null, currentTotal, targetAmount || null, color, now, now]
+      'INSERT INTO savings_pots (id, user_id, name, description, current_total, target_amount, color, interest_rate, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, userId, name, description || null, currentTotal, targetAmount || null, color, interestRate || null, now, now]
     );
 
     const pot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [id]);
@@ -264,6 +284,7 @@ router.post('/pots', requireAuth, async (req, res) => {
       currentTotal: pot.current_total,
       targetAmount: pot.target_amount,
       color: pot.color,
+      interestRate: pot.interest_rate,
       createdAt: new Date(pot.created_at),
       updatedAt: new Date(pot.updated_at)
     };
@@ -278,7 +299,7 @@ router.post('/pots', requireAuth, async (req, res) => {
 router.put('/pots/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, currentTotal, targetAmount, color } = req.body;
+    const { name, description, currentTotal, targetAmount, color, interestRate } = req.body;
     const userId = req.user.id;
 
     const existingPot = await getRow('SELECT * FROM savings_pots WHERE id = ? AND user_id = ?', [id, userId]);
@@ -289,8 +310,17 @@ router.put('/pots/:id', requireAuth, async (req, res) => {
     const now = new Date().toISOString();
 
     await runQuery(
-      'UPDATE savings_pots SET name = ?, description = ?, current_total = ?, target_amount = ?, color = ?, updated_at = ? WHERE id = ?',
-      [name || existingPot.name, description !== undefined ? description : existingPot.description, currentTotal !== undefined ? currentTotal : existingPot.current_total, targetAmount !== undefined ? targetAmount : existingPot.target_amount, color || existingPot.color, now, id]
+      'UPDATE savings_pots SET name = ?, description = ?, current_total = ?, target_amount = ?, color = ?, interest_rate = ?, updated_at = ? WHERE id = ?',
+      [
+        name || existingPot.name,
+        description !== undefined ? description : existingPot.description,
+        currentTotal !== undefined ? currentTotal : existingPot.current_total,
+        targetAmount !== undefined ? targetAmount : existingPot.target_amount,
+        color || existingPot.color,
+        interestRate !== undefined ? interestRate : existingPot.interest_rate,
+        now,
+        id
+      ]
     );
 
     const updatedPot = await getRow('SELECT * FROM savings_pots WHERE id = ?', [id]);
@@ -302,6 +332,7 @@ router.put('/pots/:id', requireAuth, async (req, res) => {
       currentTotal: updatedPot.current_total,
       targetAmount: updatedPot.target_amount,
       color: updatedPot.color,
+      interestRate: updatedPot.interest_rate,
       createdAt: new Date(updatedPot.created_at),
       updatedAt: new Date(updatedPot.updated_at)
     };

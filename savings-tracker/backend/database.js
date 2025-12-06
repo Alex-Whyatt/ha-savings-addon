@@ -122,6 +122,15 @@ function runMigrations() {
       console.log('Migration: Added category_id column to upcoming_spends');
     }
   });
+
+  // Add interest_rate column to savings_pots if it doesn't exist (annual percentage rate)
+  db.run(`ALTER TABLE savings_pots ADD COLUMN interest_rate REAL`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Migration error:', err.message);
+    } else if (!err) {
+      console.log('Migration: Added interest_rate column to savings_pots');
+    }
+  });
 }
 
 // Get users from configuration or use defaults

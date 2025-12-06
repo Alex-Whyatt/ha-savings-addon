@@ -91,7 +91,9 @@ describe('App', () => {
       user: { id: 'alex', name: 'Alex' },
       login: vi.fn(),
       logout: vi.fn(),
-      isLoading: false
+      isLoading: false,
+      allUsers: [{ id: 'alex', name: 'Alex' }, { id: 'beth', name: 'Beth' }],
+      otherUsers: [{ id: 'beth', name: 'Beth' }]
     })
 
     // Mock the savings data hook to return combined data with both users' pots
@@ -162,7 +164,9 @@ describe('App', () => {
       user: { id: 'alex', name: 'Alex' },
       login: vi.fn(),
       logout: vi.fn(),
-      isLoading: false
+      isLoading: false,
+      allUsers: [{ id: 'alex', name: 'Alex' }],
+      otherUsers: []
     })
 
     // Mock hook with error state
@@ -191,7 +195,9 @@ describe('App', () => {
       user: { id: 'alex', name: 'Alex' },
       login: vi.fn(),
       logout: vi.fn(),
-      isLoading: false
+      isLoading: false,
+      allUsers: [{ id: 'alex', name: 'Alex' }],
+      otherUsers: []
     })
 
     // Mock savings data hook

@@ -12,6 +12,7 @@ export interface SavingsPot {
   currentTotal: number;
   targetAmount?: number;
   color: string;
+  interestRate?: number | null; // Annual percentage rate (e.g., 3.1 for 3.1%)
   createdAt: Date;
   updatedAt: Date;
 }

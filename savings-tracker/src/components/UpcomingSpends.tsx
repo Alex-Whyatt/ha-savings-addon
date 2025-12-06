@@ -16,16 +16,13 @@ import {
   DialogContent,
   DialogActions,
   Chip,
-  Checkbox,
   Divider,
-  Avatar,
   InputAdornment
 } from '@mui/material';
 import {
   Add,
   Delete,
   Edit,
-  CheckCircle,
   RadioButtonUnchecked
 } from '@mui/icons-material';
 import { UpcomingSpend, User } from '../types';

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SavingsPot, User } from '../types';
+import { SavingsPot } from '../types';
 import { addSavingsPot, updateSavingsPot, deleteSavingsPot } from '../storage';
 import {
   Card,
@@ -38,6 +38,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
     description: '',
     currentTotal: '0',
     targetAmount: '',
+    interestRate: '',
     color: '#667eea'
   });
 
@@ -53,6 +54,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
       description: '',
       currentTotal: '0',
       targetAmount: '',
+      interestRate: '',
       color: '#667eea'
     });
   };
@@ -62,6 +64,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
 
     const currentTotal = parseFloat(formData.currentTotal);
     const targetAmount = formData.targetAmount ? parseFloat(formData.targetAmount) : undefined;
+    const interestRate = formData.interestRate ? parseFloat(formData.interestRate) : undefined;
 
     if (!formData.name.trim() || isNaN(currentTotal) || currentTotal < 0) {
       return;
@@ -71,12 +74,17 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
       return;
     }
 
+    if (interestRate !== undefined && (isNaN(interestRate) || interestRate < 0 || interestRate > 100)) {
+      return;
+    }
+
     if (editingPot) {
       updateSavingsPot(editingPot.id, {
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         currentTotal,
         targetAmount,
+        interestRate: interestRate ?? null,
         color: formData.color
       });
       setEditingPot(null);
@@ -86,6 +94,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
         description: formData.description.trim() || undefined,
         currentTotal,
         targetAmount,
+        interestRate: interestRate ?? null,
         color: formData.color
       });
       setShowAddForm(false);
@@ -102,6 +111,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
       description: pot.description || '',
       currentTotal: pot.currentTotal.toString(),
       targetAmount: pot.targetAmount?.toString() || '',
+      interestRate: pot.interestRate?.toString() || '',
       color: pot.color
     });
   };
@@ -233,6 +243,22 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                 }}
               />
             </Box>
+
+            <TextField
+              fullWidth
+              label="Expected Annual Growth Rate (%)"
+              type="number"
+              value={formData.interestRate}
+              onChange={(e) => setFormData({...formData, interestRate: e.target.value})}
+              placeholder="e.g., 3.1 for Cash ISA, 5 for S&S ISA"
+              helperText="Optional - Used to forecast expected growth from interest or returns"
+              inputProps={{
+                step: "0.1",
+                min: "0",
+                max: "100"
+              }}
+              sx={{ mb: 2 }}
+            />
 
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               Choose a color
@@ -406,7 +432,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                   </Typography>
 
                   {pot.targetAmount && (
-                    <Box>
+                    <Box sx={{ mb: pot.interestRate ? 1.5 : 0 }}>
                       <LinearProgress
                         variant="determinate"
                         value={progressPercentage}
@@ -433,6 +459,23 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                           £{pot.targetAmount.toLocaleString('en-GB')} goal
                         </Typography>
                       </Box>
+                    </Box>
+                  )}
+
+                  {pot.interestRate && pot.interestRate > 0 && (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1,
+                      mt: pot.targetAmount ? 0 : 1.5,
+                      p: 1,
+                      bgcolor: 'rgba(76, 175, 80, 0.08)',
+                      borderRadius: 1,
+                      border: '1px solid rgba(76, 175, 80, 0.2)'
+                    }}>
+                      <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 500 }}>
+                        📈 {pot.interestRate}% p.a.
+                      </Typography>
                     </Box>
                   )}
                 </CardContent>

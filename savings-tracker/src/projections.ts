@@ -71,6 +71,12 @@ export const calculateProjection = (
     .filter((t) => t.date.getDate() > currentDay)
     .reduce((sum, t) => sum + t.amount, 0);
 
+  // Calculate monthly growth rate from annual interest rate
+  // Monthly rate = (1 + annual_rate/100)^(1/12) - 1
+  const annualRate = pot.interestRate || 0;
+  const monthlyGrowthMultiplier =
+    annualRate > 0 ? Math.pow(1 + annualRate / 100, 1 / 12) : 1;
+
   // Start with the pot's actual current total
   let cumulativeAmount = pot.currentTotal;
 
@@ -95,6 +101,11 @@ export const calculateProjection = (
         projected: false,
       });
     } else {
+      // Apply monthly compound growth from interest/returns (applied to balance at start of month)
+      if (annualRate > 0) {
+        cumulativeAmount *= monthlyGrowthMultiplier;
+      }
+
       // Calculate weekly recurring for this month
       let weeklyTotal = 0;
       weeklyRecurringTxns.forEach((t) => {

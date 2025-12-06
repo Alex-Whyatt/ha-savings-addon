@@ -15,8 +15,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Chip,
-  Avatar
+  Chip
 } from '@mui/material';
 import {
   Add,

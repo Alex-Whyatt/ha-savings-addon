@@ -130,7 +130,7 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
         </Box>
 
         {pot.targetAmount && (
-          <Box>
+          <Box sx={{ mb: pot.interestRate ? 1.5 : 0 }}>
             <LinearProgress
               variant="determinate"
               value={progressPercentage}
@@ -145,6 +145,27 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
             />
             <Typography variant="body2" color="text.secondary">
               {progressPercentage.toFixed(1)}% of £{pot.targetAmount.toFixed(2)} target
+            </Typography>
+          </Box>
+        )}
+
+        {pot.interestRate && pot.interestRate > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+            mt: pot.targetAmount ? 0 : 1,
+            p: 1,
+            bgcolor: 'success.50',
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'success.200'
+          }}>
+            <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 500 }}>
+              📈 {pot.interestRate}% p.a.
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              ~£{((pot.currentTotal * pot.interestRate) / 100).toFixed(0)}/year growth
             </Typography>
           </Box>
         )}
