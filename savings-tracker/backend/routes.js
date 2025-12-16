@@ -829,6 +829,7 @@ router.get('/budget', requireAuth, async (req, res) => {
       streams: streams.map(s => ({
         id: s.id,
         budgetId: s.budget_id,
+        parentId: s.parent_id || null,
         name: s.name,
         amount: s.amount,
         color: s.color,
@@ -891,7 +892,7 @@ router.put('/budget', requireAuth, async (req, res) => {
 router.post('/budget/streams', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, amount, color, isAutoSavings, sortOrder } = req.body;
+    const { name, amount, color, isAutoSavings, sortOrder, parentId } = req.body;
     
     if (!name || typeof amount !== 'number') {
       return res.status(400).json({ error: 'Name and amount are required' });
@@ -910,11 +911,19 @@ router.post('/budget/streams', requireAuth, async (req, res) => {
       budget = await getRow('SELECT * FROM budget_allocations WHERE id = ?', [budgetId]);
     }
     
+    // Validate parentId if provided
+    if (parentId) {
+      const parentStream = await getRow('SELECT * FROM budget_streams WHERE id = ? AND budget_id = ?', [parentId, budget.id]);
+      if (!parentStream) {
+        return res.status(400).json({ error: 'Parent stream not found' });
+      }
+    }
+    
     const id = uuidv4();
     
     await runQuery(
-      'INSERT INTO budget_streams (id, budget_id, name, amount, color, is_auto_savings, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, budget.id, name, amount, color || '#667eea', isAutoSavings ? 1 : 0, sortOrder || 0, now, now]
+      'INSERT INTO budget_streams (id, budget_id, parent_id, name, amount, color, is_auto_savings, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, budget.id, parentId || null, name, amount, color || '#667eea', isAutoSavings ? 1 : 0, sortOrder || 0, now, now]
     );
     
     const stream = await getRow('SELECT * FROM budget_streams WHERE id = ?', [id]);
@@ -922,6 +931,7 @@ router.post('/budget/streams', requireAuth, async (req, res) => {
     res.status(201).json({
       id: stream.id,
       budgetId: stream.budget_id,
+      parentId: stream.parent_id || null,
       name: stream.name,
       amount: stream.amount,
       color: stream.color,
@@ -941,7 +951,7 @@ router.put('/budget/streams/:id', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const { name, amount, color, sortOrder } = req.body;
+    const { name, amount, color, sortOrder, parentId } = req.body;
     
     // Verify stream belongs to user's budget
     const budget = await getRow('SELECT * FROM budget_allocations WHERE user_id = ?', [userId]);
@@ -954,15 +964,38 @@ router.put('/budget/streams/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Stream not found' });
     }
     
+    // Validate parentId if provided (and make sure it's not creating a cycle)
+    const newParentId = parentId !== undefined ? parentId : existingStream.parent_id;
+    if (newParentId) {
+      // Check parent exists
+      const parentStream = await getRow('SELECT * FROM budget_streams WHERE id = ? AND budget_id = ?', [newParentId, budget.id]);
+      if (!parentStream) {
+        return res.status(400).json({ error: 'Parent stream not found' });
+      }
+      // Prevent setting self as parent
+      if (newParentId === id) {
+        return res.status(400).json({ error: 'Stream cannot be its own parent' });
+      }
+      // Prevent circular references by checking if the new parent is a descendant of this stream
+      let currentParent = parentStream;
+      while (currentParent && currentParent.parent_id) {
+        if (currentParent.parent_id === id) {
+          return res.status(400).json({ error: 'Circular parent reference detected' });
+        }
+        currentParent = await getRow('SELECT * FROM budget_streams WHERE id = ?', [currentParent.parent_id]);
+      }
+    }
+    
     const now = new Date().toISOString();
     
     await runQuery(
-      'UPDATE budget_streams SET name = ?, amount = ?, color = ?, sort_order = ?, updated_at = ? WHERE id = ?',
+      'UPDATE budget_streams SET name = ?, amount = ?, color = ?, sort_order = ?, parent_id = ?, updated_at = ? WHERE id = ?',
       [
         name !== undefined ? name : existingStream.name,
         amount !== undefined ? amount : existingStream.amount,
         color !== undefined ? color : existingStream.color,
         sortOrder !== undefined ? sortOrder : existingStream.sort_order,
+        parentId !== undefined ? parentId : existingStream.parent_id,
         now,
         id
       ]
@@ -973,6 +1006,7 @@ router.put('/budget/streams/:id', requireAuth, async (req, res) => {
     res.json({
       id: stream.id,
       budgetId: stream.budget_id,
+      parentId: stream.parent_id || null,
       name: stream.name,
       amount: stream.amount,
       color: stream.color,
@@ -1008,6 +1042,9 @@ router.delete('/budget/streams/:id', requireAuth, async (req, res) => {
     if (stream.is_auto_savings === 1) {
       return res.status(400).json({ error: 'Cannot delete the savings stream' });
     }
+    
+    // Move children up to the deleted stream's parent (or make them root-level)
+    await runQuery('UPDATE budget_streams SET parent_id = ? WHERE parent_id = ?', [stream.parent_id || null, id]);
     
     await runQuery('DELETE FROM budget_streams WHERE id = ?', [id]);
     

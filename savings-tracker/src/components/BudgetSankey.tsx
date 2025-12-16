@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -19,6 +19,10 @@ import {
   Alert,
   CircularProgress,
   Collapse,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -27,6 +31,7 @@ import SavingsIcon from '@mui/icons-material/Savings';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import SubdirectoryArrowRightIcon from '@mui/icons-material/SubdirectoryArrowRight';
 import { ResponsiveSankey } from '@nivo/sankey';
 import {
   fetchBudget,
@@ -98,6 +103,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
   const [streamName, setStreamName] = useState('');
   const [streamAmount, setStreamAmount] = useState('');
   const [streamColor, setStreamColor] = useState(STREAM_COLORS[0]);
+  const [streamParentId, setStreamParentId] = useState<string | null>(null);
 
   const loadBudget = useCallback(async () => {
     try {
@@ -141,12 +147,13 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
     }
   };
 
-  const handleOpenStreamDialog = (stream?: BudgetStream) => {
+  const handleOpenStreamDialog = (stream?: BudgetStream, defaultParentId?: string | null) => {
     if (stream) {
       setEditingStream(stream);
       setStreamName(stream.name);
       setStreamAmount(stream.amount.toString());
       setStreamColor(stream.color);
+      setStreamParentId(stream.parentId);
     } else {
       setEditingStream(null);
       setStreamName('');
@@ -155,6 +162,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       const usedColors = budget?.streams.map(s => s.color) || [];
       const nextColor = STREAM_COLORS.find(c => !usedColors.includes(c)) || STREAM_COLORS[0];
       setStreamColor(nextColor);
+      setStreamParentId(defaultParentId ?? null);
     }
     setStreamDialogOpen(true);
   };
@@ -164,6 +172,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
     setEditingStream(null);
     setStreamName('');
     setStreamAmount('');
+    setStreamParentId(null);
   };
 
   const handleSaveStream = async () => {
@@ -180,6 +189,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
           name: streamName,
           amount,
           color: streamColor,
+          parentId: streamParentId,
         });
       } else {
         await createBudgetStream({
@@ -188,6 +198,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
           color: streamColor,
           isAutoSavings: false,
           sortOrder: (budget?.streams.length || 0) + 1,
+          parentId: streamParentId,
         });
       }
       await loadBudget();
@@ -215,37 +226,71 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
     }
   };
 
-  // Calculate totals and unallocated
-  const userStreamsTotal = userStreams.reduce((sum, s) => sum + s.amount, 0);
-  const totalAllocated = userStreamsTotal + totalRecurringMonthly;
+  // Build hierarchical structure from flat stream list
+  const buildStreamTree = useMemo(() => {
+    const streamMap = new Map<string, BudgetStream & { children: BudgetStream[] }>();
+    const rootStreams: (BudgetStream & { children: BudgetStream[] })[] = [];
+    
+    // First pass: create map with children arrays
+    userStreams.forEach(stream => {
+      streamMap.set(stream.id, { ...stream, children: [] });
+    });
+    
+    // Second pass: build tree
+    userStreams.forEach(stream => {
+      const streamWithChildren = streamMap.get(stream.id)!;
+      if (stream.parentId && streamMap.has(stream.parentId)) {
+        streamMap.get(stream.parentId)!.children.push(streamWithChildren);
+      } else {
+        rootStreams.push(streamWithChildren);
+      }
+    });
+    
+    return { streamMap, rootStreams };
+  }, [userStreams]);
+
+  // Calculate only root-level stream amounts for top-level allocation
+  // Child streams are part of their parent's allocation
+  const getRootStreamTotal = (stream: BudgetStream & { children: BudgetStream[] }): number => {
+    // If stream has children, its value flows to children
+    // If stream has no children, it's a leaf and keeps its amount
+    return stream.amount;
+  };
+
+  const rootStreamsTotal = buildStreamTree.rootStreams.reduce((sum, s) => sum + getRootStreamTotal(s), 0);
+  const totalAllocated = rootStreamsTotal + totalRecurringMonthly;
   const netSalaryValue = budget?.netSalary || 0;
   const unallocated = netSalaryValue - totalAllocated;
 
-  // Build Nivo Sankey data
+  // Build Nivo Sankey data with hierarchical streams
   // Nivo uses { nodes: [{id}], links: [{source, target, value}] }
   const buildSankeyData = () => {
     if (!budget || netSalaryValue === 0) return null;
     
     const hasSavings = savingsBreakdown.length > 0 && totalRecurringMonthly > 0;
-    const activeUserStreams = userStreams.filter(s => s.amount > 0);
-    const hasUserStreams = activeUserStreams.length > 0;
+    const { rootStreams, streamMap } = buildStreamTree;
+    const hasUserStreams = rootStreams.length > 0;
     
     if (!hasSavings && !hasUserStreams && unallocated <= 0) return null;
     
     const nodes: { id: string; nodeColor: string }[] = [];
     const links: { source: string; target: string; value: number }[] = [];
-    
-    // Build color map for nodes
     const colorMap: Record<string, string> = {};
+    const addedNodeIds = new Set<string>();
+    
+    // Helper to get unique node ID (in case of name collisions)
+    const getNodeId = (stream: BudgetStream) => `stream-${stream.id}`;
     
     // Node: Net Salary (source)
     nodes.push({ id: 'Net Salary', nodeColor: NODE_COLORS['net-salary'] });
     colorMap['Net Salary'] = NODE_COLORS['net-salary'];
+    addedNodeIds.add('Net Salary');
     
     // If we have savings, create intermediate "Savings" node and individual pots
     if (hasSavings) {
       nodes.push({ id: 'Savings', nodeColor: NODE_COLORS['savings'] });
       colorMap['Savings'] = NODE_COLORS['savings'];
+      addedNodeIds.add('Savings');
       
       // Link Salary -> Savings
       links.push({
@@ -260,6 +305,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
         const color = saving.potColor || STREAM_COLORS[idx % STREAM_COLORS.length];
         nodes.push({ id: potId, nodeColor: color });
         colorMap[potId] = color;
+        addedNodeIds.add(potId);
         
         // Link Savings -> Individual Pot
         links.push({
@@ -270,19 +316,54 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       });
     }
     
-    // Add user-defined streams (directly from Salary)
-    activeUserStreams.forEach((stream, idx) => {
-      const streamId = stream.name;
-      const color = stream.color || STREAM_COLORS[(savingsBreakdown.length + idx) % STREAM_COLORS.length];
-      nodes.push({ id: streamId, nodeColor: color });
-      colorMap[streamId] = color;
+    // Recursively add streams and their children
+    const addStreamNode = (stream: BudgetStream & { children: BudgetStream[] }, parentNodeId: string) => {
+      if (stream.amount <= 0) return;
       
-      // Link Salary -> User Stream
+      const nodeId = getNodeId(stream);
+      const color = stream.color || STREAM_COLORS[0];
+      
+      // Add node
+      nodes.push({ id: nodeId, nodeColor: color });
+      colorMap[nodeId] = color;
+      addedNodeIds.add(nodeId);
+      
+      // Link parent -> this stream
       links.push({
-        source: 'Net Salary',
-        target: streamId,
+        source: parentNodeId,
+        target: nodeId,
         value: stream.amount,
       });
+      
+      // If this stream has children, add them
+      if (stream.children.length > 0) {
+        const childrenTotal = stream.children.reduce((sum, c) => sum + c.amount, 0);
+        
+        stream.children.forEach(child => {
+          const childWithChildren = streamMap.get(child.id);
+          if (childWithChildren && childWithChildren.amount > 0) {
+            addStreamNode(childWithChildren, nodeId);
+          }
+        });
+        
+        // If children don't account for all of parent's amount, add "Other" node
+        const remainder = stream.amount - childrenTotal;
+        if (remainder > 0.01) {
+          const otherNodeId = `${nodeId}-other`;
+          nodes.push({ id: otherNodeId, nodeColor: '#94a3b8' });
+          colorMap[otherNodeId] = '#94a3b8';
+          links.push({
+            source: nodeId,
+            target: otherNodeId,
+            value: remainder,
+          });
+        }
+      }
+    };
+    
+    // Add root-level user streams (connected to Net Salary)
+    rootStreams.forEach(stream => {
+      addStreamNode(stream, 'Net Salary');
     });
     
     // Add unallocated if positive
@@ -297,7 +378,20 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       });
     }
     
-    return { nodes, links, colorMap };
+    // Create label map for display
+    const labelMap: Record<string, string> = { 'Net Salary': 'Net Salary', 'Savings': 'Savings', 'Unallocated': 'Unallocated' };
+    userStreams.forEach(s => {
+      labelMap[getNodeId(s)] = s.name;
+    });
+    // Handle "other" nodes
+    userStreams.forEach(s => {
+      labelMap[`${getNodeId(s)}-other`] = 'Other';
+    });
+    savingsBreakdown.forEach(s => {
+      labelMap[s.potName] = s.potName;
+    });
+    
+    return { nodes, links, colorMap, labelMap };
   };
 
   const sankeyData = buildSankeyData();
@@ -316,19 +410,33 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
         order[s.potName] = 2 + idx;
       });
       
-      // User streams get order 100-199
-      userStreams.forEach((s, idx) => {
-        order[s.name] = 100 + idx;
-      });
+      // Build order for hierarchical streams using DFS
+      let orderIdx = 100;
+      const assignOrder = (streams: typeof buildStreamTree.rootStreams) => {
+        streams.forEach(stream => {
+          order[`stream-${stream.id}`] = orderIdx++;
+          order[`stream-${stream.id}-other`] = orderIdx++;
+          if (stream.children.length > 0) {
+            const childrenWithChildren = stream.children.map(c => buildStreamTree.streamMap.get(c.id)!).filter(Boolean);
+            assignOrder(childrenWithChildren);
+          }
+        });
+      };
+      assignOrder(buildStreamTree.rootStreams);
       
       // Unallocated at the end
-      order['Unallocated'] = 200;
+      order['Unallocated'] = 1000;
       
-      const orderA = order[a.id] ?? 150;
-      const orderB = order[b.id] ?? 150;
+      const orderA = order[a.id] ?? 500;
+      const orderB = order[b.id] ?? 500;
       
       return orderA - orderB;
     };
+  };
+
+  // Get node label from labelMap
+  const getNodeLabel = (nodeId: string) => {
+    return sankeyData?.labelMap?.[nodeId] || nodeId;
   };
 
   if (loading) {
@@ -409,7 +517,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
             <Typography variant="h6" sx={{ mb: 2 }}>
               Salary Allocation Flow
             </Typography>
-            <Box sx={{ height: 450, width: '100%' }}>
+            <Box sx={{ height: Math.max(450, userStreams.length * 40 + 200), width: '100%' }}>
               <ResponsiveSankey
                 data={sankeyData}
                 margin={{ top: 20, right: 200, bottom: 20, left: 20 }}
@@ -418,7 +526,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                 nodeOpacity={1}
                 nodeHoverOthersOpacity={0.35}
                 nodeThickness={24}
-                nodeSpacing={24}
+                nodeSpacing={18}
                 nodeBorderWidth={0}
                 nodeBorderRadius={3}
                 linkOpacity={0.4}
@@ -430,6 +538,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                 labelPadding={16}
                 labelTextColor={{ from: 'color', modifiers: [['darker', 1]] }}
                 sort={getNodeSort()}
+                label={(node) => getNodeLabel(node.id)}
                 nodeTooltip={({ node }) => (
                   <Box sx={{ 
                     bgcolor: 'white', 
@@ -439,7 +548,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                     border: '1px solid #e5e7eb'
                   }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
-                      {node.id}
+                      {getNodeLabel(node.id)}
                     </Typography>
                     <Typography variant="body2" sx={{ color: node.color, fontWeight: 600, mt: 0.5 }}>
                       £{node.value.toLocaleString()}
@@ -455,7 +564,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                     border: '1px solid #e5e7eb'
                   }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
-                      {link.source.id} → {link.target.id}
+                      {getNodeLabel(link.source.id)} → {getNodeLabel(link.target.id)}
                     </Typography>
                     <Typography variant="body2" sx={{ color: link.target.color, fontWeight: 600, mt: 0.5 }}>
                       £{link.value.toLocaleString()}
@@ -601,7 +710,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Other Allocations</Typography>
+            <Typography variant="h6">Budget Allocations</Typography>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -612,54 +721,105 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
             </Button>
           </Box>
           
-          <List>
-            {userStreams.map((stream) => (
-              <ListItem
-                key={stream.id}
-                sx={{
-                  bgcolor: 'grey.50',
-                  borderRadius: 1,
-                  mb: 1,
-                  border: '1px solid',
-                  borderColor: 'grey.200',
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    bgcolor: stream.color,
-                    mr: 2,
-                    flexShrink: 0,
-                  }}
-                />
-                <ListItemText
-                  primary={stream.name}
-                  secondary={`£${stream.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })} / month`}
-                />
-                <ListItemSecondaryAction>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleOpenStreamDialog(stream)}
-                    sx={{ mr: 1 }}
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteStream(stream.id)}
-                    color="error"
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
+          <List sx={{ py: 0 }}>
+            {/* Render streams hierarchically */}
+            {(() => {
+              const renderStream = (stream: BudgetStream & { children: BudgetStream[] }, depth: number = 0) => {
+                const childrenWithChildren = stream.children.map(c => buildStreamTree.streamMap.get(c.id)!).filter(Boolean);
+                const hasChildren = childrenWithChildren.length > 0;
+                
+                return (
+                  <React.Fragment key={stream.id}>
+                    <ListItem
+                      sx={{
+                        bgcolor: depth === 0 ? 'grey.50' : 'grey.100',
+                        borderRadius: 1,
+                        mb: 0.5,
+                        ml: depth * 3,
+                        border: '1px solid',
+                        borderColor: depth === 0 ? 'grey.200' : 'grey.300',
+                        py: 1,
+                      }}
+                    >
+                      {depth > 0 && (
+                        <SubdirectoryArrowRightIcon 
+                          sx={{ 
+                            color: 'grey.400', 
+                            mr: 1, 
+                            fontSize: 18,
+                          }} 
+                        />
+                      )}
+                      <Box
+                        sx={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          bgcolor: stream.color,
+                          mr: 1.5,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {stream.name}
+                            </Typography>
+                            {hasChildren && (
+                              <Typography variant="caption" color="text.secondary">
+                                ({childrenWithChildren.length} sub-item{childrenWithChildren.length !== 1 ? 's' : ''})
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                        secondary={`£${stream.amount.toLocaleString('en-GB', { minimumFractionDigits: 2 })} / month`}
+                        primaryTypographyProps={{ variant: 'body2' }}
+                        secondaryTypographyProps={{ variant: 'caption' }}
+                      />
+                      <ListItemSecondaryAction>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenStreamDialog(undefined, stream.id)}
+                          sx={{ mr: 0.5 }}
+                          title="Add child stream"
+                        >
+                          <AddIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenStreamDialog(stream)}
+                          sx={{ mr: 0.5 }}
+                          title="Edit stream"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteStream(stream.id)}
+                          color="error"
+                          title="Delete stream"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                    {/* Render children */}
+                    {childrenWithChildren.map(child => renderStream(child, depth + 1))}
+                  </React.Fragment>
+                );
+              };
+              
+              return buildStreamTree.rootStreams.map(stream => renderStream(stream, 0));
+            })()}
             
             {userStreams.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
                 Add streams for things like joint account contributions, personal spending, etc.
+                <br />
+                <Typography component="span" variant="caption" color="text.secondary">
+                  Tip: Create parent streams and add child items for detailed breakdowns!
+                </Typography>
               </Typography>
             )}
           </List>
@@ -676,7 +836,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
               value={streamName}
               onChange={(e) => setStreamName(e.target.value)}
               fullWidth
-              placeholder="e.g., Joint Account, Personal Spending"
+              placeholder="e.g., Joint Account, Personal Spending, Xbox Subscription"
             />
             <TextField
               label="Monthly Amount"
@@ -688,6 +848,55 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                 startAdornment: <InputAdornment position="start">£</InputAdornment>,
               }}
             />
+            <FormControl fullWidth>
+              <InputLabel>Parent Stream (optional)</InputLabel>
+              <Select
+                value={streamParentId || ''}
+                onChange={(e) => setStreamParentId(e.target.value || null)}
+                label="Parent Stream (optional)"
+              >
+                <MenuItem value="">
+                  <em>None (root level)</em>
+                </MenuItem>
+                {userStreams
+                  .filter(s => s.id !== editingStream?.id) // Can't be parent of itself
+                  .filter(s => {
+                    // Prevent selecting descendants as parent (would create cycle)
+                    if (!editingStream) return true;
+                    let current = s;
+                    while (current.parentId) {
+                      if (current.parentId === editingStream.id) return false;
+                      current = userStreams.find(us => us.id === current.parentId) || current;
+                      if (!current.parentId) break;
+                    }
+                    return true;
+                  })
+                  .map(s => {
+                    // Build path to show hierarchy
+                    const getPath = (stream: BudgetStream): string => {
+                      if (!stream.parentId) return stream.name;
+                      const parent = userStreams.find(us => us.id === stream.parentId);
+                      return parent ? `${getPath(parent)} → ${stream.name}` : stream.name;
+                    };
+                    return (
+                      <MenuItem key={s.id} value={s.id}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              bgcolor: s.color,
+                              flexShrink: 0,
+                            }}
+                          />
+                          {getPath(s)}
+                        </Box>
+                      </MenuItem>
+                    );
+                  })}
+              </Select>
+            </FormControl>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>Color</Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

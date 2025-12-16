@@ -159,6 +159,15 @@ function runMigrations() {
       console.log('Migration: Added interest_rate column to savings_pots');
     }
   });
+
+  // Add parent_id column to budget_streams for hierarchical streams
+  db.run(`ALTER TABLE budget_streams ADD COLUMN parent_id TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Migration error:', err.message);
+    } else if (!err) {
+      console.log('Migration: Added parent_id column to budget_streams');
+    }
+  });
 }
 
 // Get users from configuration or use defaults

@@ -339,6 +339,7 @@ export const fetchBudget = async (): Promise<BudgetWithStreams | null> => {
       updatedAt: new Date(budget.updatedAt),
       streams: budget.streams.map((s: any) => ({
         ...s,
+        parentId: s.parentId || null,
         createdAt: new Date(s.createdAt),
         updatedAt: new Date(s.updatedAt),
       })),
@@ -380,6 +381,7 @@ export const createBudgetStream = async (
     });
     return {
       ...result,
+      parentId: result.parentId || null,
       createdAt: new Date(result.createdAt),
       updatedAt: new Date(result.updatedAt),
     };
@@ -406,6 +408,7 @@ export const updateBudgetStream = async (
     });
     return {
       ...result,
+      parentId: result.parentId || null,
       createdAt: new Date(result.createdAt),
       updatedAt: new Date(result.updatedAt),
     };

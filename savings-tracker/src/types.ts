@@ -103,6 +103,7 @@ export interface BudgetAllocation {
 export interface BudgetStream {
   id: string;
   budgetId: string;
+  parentId: string | null; // Parent stream ID for hierarchical structure
   name: string;
   amount: number;
   color: string;
@@ -116,4 +117,4 @@ export type CreateBudgetAllocation = Pick<BudgetAllocation, "netSalary">;
 export type CreateBudgetStream = Pick<
   BudgetStream,
   "name" | "amount" | "color" | "isAutoSavings" | "sortOrder"
->;
+> & { parentId?: string | null };
