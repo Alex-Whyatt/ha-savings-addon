@@ -23,6 +23,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -87,6 +89,10 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
   savingsBreakdown,
   onDataChange,
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [budget, setBudget] = useState<BudgetWithStreams | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -434,10 +440,29 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
     };
   };
 
-  // Get node label from labelMap
-  const getNodeLabel = (nodeId: string) => {
-    return sankeyData?.labelMap?.[nodeId] || nodeId;
+  // Get node label from labelMap, with optional truncation for mobile
+  const getNodeLabel = (nodeId: string, truncate: boolean = false) => {
+    const label = sankeyData?.labelMap?.[nodeId] || nodeId;
+    if (truncate && isMobile && label.length > 12) {
+      return label.substring(0, 10) + '…';
+    }
+    if (truncate && isTablet && label.length > 18) {
+      return label.substring(0, 16) + '…';
+    }
+    return label;
   };
+  
+  // Responsive Sankey configuration
+  const sankeyMargin = useMemo(() => ({
+    top: 20,
+    right: isMobile ? 100 : isTablet ? 140 : 200,
+    bottom: 20,
+    left: isMobile ? 10 : 20,
+  }), [isMobile, isTablet]);
+  
+  const sankeyNodeThickness = isMobile ? 18 : 24;
+  const sankeyNodeSpacing = isMobile ? 12 : 18;
+  const sankeyLabelPadding = isMobile ? 8 : 16;
 
   if (loading) {
     return (
@@ -513,32 +538,40 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       {/* Sankey Diagram */}
       {sankeyData && sankeyData.links.length > 0 ? (
         <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+          <CardContent sx={{ px: isMobile ? 1 : 2 }}>
+            <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1rem' : '1.25rem' }}>
               Salary Allocation Flow
             </Typography>
-            <Box sx={{ height: Math.max(450, userStreams.length * 40 + 200), width: '100%' }}>
+            <Box 
+              sx={{ 
+                height: Math.max(isMobile ? 350 : 450, userStreams.length * (isMobile ? 30 : 40) + (isMobile ? 150 : 200)), 
+                width: '100%',
+                '& text': {
+                  fontSize: isMobile ? '11px !important' : isTablet ? '12px !important' : '14px',
+                },
+              }}
+            >
               <ResponsiveSankey
                 data={sankeyData}
-                margin={{ top: 20, right: 200, bottom: 20, left: 20 }}
+                margin={sankeyMargin}
                 align="justify"
                 colors={(node) => sankeyData.colorMap[node.id] || '#888'}
                 nodeOpacity={1}
                 nodeHoverOthersOpacity={0.35}
-                nodeThickness={24}
-                nodeSpacing={18}
+                nodeThickness={sankeyNodeThickness}
+                nodeSpacing={sankeyNodeSpacing}
                 nodeBorderWidth={0}
                 nodeBorderRadius={3}
                 linkOpacity={0.4}
                 linkHoverOthersOpacity={0.1}
-                linkContract={3}
+                linkContract={isMobile ? 2 : 3}
                 enableLinkGradient={true}
                 labelPosition="outside"
                 labelOrientation="horizontal"
-                labelPadding={16}
+                labelPadding={sankeyLabelPadding}
                 labelTextColor={{ from: 'color', modifiers: [['darker', 1]] }}
                 sort={getNodeSort()}
-                label={(node) => getNodeLabel(node.id)}
+                label={(node) => getNodeLabel(node.id, true)}
                 nodeTooltip={({ node }) => (
                   <Box sx={{ 
                     bgcolor: 'white', 
