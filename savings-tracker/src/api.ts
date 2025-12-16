@@ -9,6 +9,9 @@ import {
   CreateUpcomingSpend,
   ExpenseCategory,
   CreateExpenseCategory,
+  BudgetAllocation,
+  BudgetStream,
+  CreateBudgetStream,
 } from "./types";
 
 // Use relative URL for production (HA ingress), absolute URL only for local dev
@@ -316,6 +319,111 @@ export const deleteExpenseCategory = async (id: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error("Error deleting expense category:", error);
+    return false;
+  }
+};
+
+// ==================== Budget Allocation API ====================
+
+export interface BudgetWithStreams extends BudgetAllocation {
+  streams: BudgetStream[];
+}
+
+// Fetch budget allocation with streams
+export const fetchBudget = async (): Promise<BudgetWithStreams | null> => {
+  try {
+    const budget = await apiRequest<any>("/budget");
+    return {
+      ...budget,
+      createdAt: new Date(budget.createdAt),
+      updatedAt: new Date(budget.updatedAt),
+      streams: budget.streams.map((s: any) => ({
+        ...s,
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+      })),
+    };
+  } catch (error) {
+    console.error("Error fetching budget:", error);
+    return null;
+  }
+};
+
+// Update budget net salary
+export const updateBudget = async (
+  netSalary: number
+): Promise<BudgetAllocation | null> => {
+  try {
+    const result = await apiRequest<any>("/budget", {
+      method: "PUT",
+      body: JSON.stringify({ netSalary }),
+    });
+    return {
+      ...result,
+      createdAt: new Date(result.createdAt),
+      updatedAt: new Date(result.updatedAt),
+    };
+  } catch (error) {
+    console.error("Error updating budget:", error);
+    return null;
+  }
+};
+
+// Create a new budget stream
+export const createBudgetStream = async (
+  stream: CreateBudgetStream
+): Promise<BudgetStream | null> => {
+  try {
+    const result = await apiRequest<any>("/budget/streams", {
+      method: "POST",
+      body: JSON.stringify(stream),
+    });
+    return {
+      ...result,
+      createdAt: new Date(result.createdAt),
+      updatedAt: new Date(result.updatedAt),
+    };
+  } catch (error) {
+    console.error("Error creating budget stream:", error);
+    return null;
+  }
+};
+
+// Update a budget stream
+export const updateBudgetStream = async (
+  id: string,
+  updates: Partial<
+    Omit<
+      BudgetStream,
+      "id" | "budgetId" | "isAutoSavings" | "createdAt" | "updatedAt"
+    >
+  >
+): Promise<BudgetStream | null> => {
+  try {
+    const result = await apiRequest<any>(`/budget/streams/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    });
+    return {
+      ...result,
+      createdAt: new Date(result.createdAt),
+      updatedAt: new Date(result.updatedAt),
+    };
+  } catch (error) {
+    console.error("Error updating budget stream:", error);
+    return null;
+  }
+};
+
+// Delete a budget stream
+export const deleteBudgetStream = async (id: string): Promise<boolean> => {
+  try {
+    await apiRequest(`/budget/streams/${id}`, {
+      method: "DELETE",
+    });
+    return true;
+  } catch (error) {
+    console.error("Error deleting budget stream:", error);
     return false;
   }
 };

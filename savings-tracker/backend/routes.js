@@ -792,4 +792,230 @@ router.delete('/expense-categories/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ==================== Budget Allocation Routes ====================
+// Budget allocation for Sankey diagram visualization
+
+// Get user's budget allocation with streams
+router.get('/budget', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    let budget = await getRow('SELECT * FROM budget_allocations WHERE user_id = ?', [userId]);
+    
+    // If no budget exists, create one with default values
+    if (!budget) {
+      const id = uuidv4();
+      const now = new Date().toISOString();
+      
+      await runQuery(
+        'INSERT INTO budget_allocations (id, user_id, net_salary, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [id, userId, 0, now, now]
+      );
+      
+      budget = await getRow('SELECT * FROM budget_allocations WHERE id = ?', [id]);
+    }
+    
+    const streams = await getAllRows(
+      'SELECT * FROM budget_streams WHERE budget_id = ? ORDER BY sort_order ASC',
+      [budget.id]
+    );
+    
+    res.json({
+      id: budget.id,
+      userId: budget.user_id,
+      netSalary: budget.net_salary,
+      createdAt: new Date(budget.created_at),
+      updatedAt: new Date(budget.updated_at),
+      streams: streams.map(s => ({
+        id: s.id,
+        budgetId: s.budget_id,
+        name: s.name,
+        amount: s.amount,
+        color: s.color,
+        isAutoSavings: s.is_auto_savings === 1,
+        sortOrder: s.sort_order,
+        createdAt: new Date(s.created_at),
+        updatedAt: new Date(s.updated_at)
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching budget:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update budget allocation (net salary)
+router.put('/budget', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { netSalary } = req.body;
+    
+    if (typeof netSalary !== 'number' || netSalary < 0) {
+      return res.status(400).json({ error: 'Valid net salary is required' });
+    }
+    
+    let budget = await getRow('SELECT * FROM budget_allocations WHERE user_id = ?', [userId]);
+    const now = new Date().toISOString();
+    
+    if (!budget) {
+      // Create new budget
+      const id = uuidv4();
+      await runQuery(
+        'INSERT INTO budget_allocations (id, user_id, net_salary, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [id, userId, netSalary, now, now]
+      );
+      budget = await getRow('SELECT * FROM budget_allocations WHERE id = ?', [id]);
+    } else {
+      // Update existing budget
+      await runQuery(
+        'UPDATE budget_allocations SET net_salary = ?, updated_at = ? WHERE id = ?',
+        [netSalary, now, budget.id]
+      );
+      budget = await getRow('SELECT * FROM budget_allocations WHERE id = ?', [budget.id]);
+    }
+    
+    res.json({
+      id: budget.id,
+      userId: budget.user_id,
+      netSalary: budget.net_salary,
+      createdAt: new Date(budget.created_at),
+      updatedAt: new Date(budget.updated_at)
+    });
+  } catch (error) {
+    console.error('Error updating budget:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Add a new budget stream
+router.post('/budget/streams', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, amount, color, isAutoSavings, sortOrder } = req.body;
+    
+    if (!name || typeof amount !== 'number') {
+      return res.status(400).json({ error: 'Name and amount are required' });
+    }
+    
+    // Get or create budget
+    let budget = await getRow('SELECT * FROM budget_allocations WHERE user_id = ?', [userId]);
+    const now = new Date().toISOString();
+    
+    if (!budget) {
+      const budgetId = uuidv4();
+      await runQuery(
+        'INSERT INTO budget_allocations (id, user_id, net_salary, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [budgetId, userId, 0, now, now]
+      );
+      budget = await getRow('SELECT * FROM budget_allocations WHERE id = ?', [budgetId]);
+    }
+    
+    const id = uuidv4();
+    
+    await runQuery(
+      'INSERT INTO budget_streams (id, budget_id, name, amount, color, is_auto_savings, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, budget.id, name, amount, color || '#667eea', isAutoSavings ? 1 : 0, sortOrder || 0, now, now]
+    );
+    
+    const stream = await getRow('SELECT * FROM budget_streams WHERE id = ?', [id]);
+    
+    res.status(201).json({
+      id: stream.id,
+      budgetId: stream.budget_id,
+      name: stream.name,
+      amount: stream.amount,
+      color: stream.color,
+      isAutoSavings: stream.is_auto_savings === 1,
+      sortOrder: stream.sort_order,
+      createdAt: new Date(stream.created_at),
+      updatedAt: new Date(stream.updated_at)
+    });
+  } catch (error) {
+    console.error('Error creating budget stream:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update a budget stream
+router.put('/budget/streams/:id', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const { name, amount, color, sortOrder } = req.body;
+    
+    // Verify stream belongs to user's budget
+    const budget = await getRow('SELECT * FROM budget_allocations WHERE user_id = ?', [userId]);
+    if (!budget) {
+      return res.status(404).json({ error: 'Budget not found' });
+    }
+    
+    const existingStream = await getRow('SELECT * FROM budget_streams WHERE id = ? AND budget_id = ?', [id, budget.id]);
+    if (!existingStream) {
+      return res.status(404).json({ error: 'Stream not found' });
+    }
+    
+    const now = new Date().toISOString();
+    
+    await runQuery(
+      'UPDATE budget_streams SET name = ?, amount = ?, color = ?, sort_order = ?, updated_at = ? WHERE id = ?',
+      [
+        name !== undefined ? name : existingStream.name,
+        amount !== undefined ? amount : existingStream.amount,
+        color !== undefined ? color : existingStream.color,
+        sortOrder !== undefined ? sortOrder : existingStream.sort_order,
+        now,
+        id
+      ]
+    );
+    
+    const stream = await getRow('SELECT * FROM budget_streams WHERE id = ?', [id]);
+    
+    res.json({
+      id: stream.id,
+      budgetId: stream.budget_id,
+      name: stream.name,
+      amount: stream.amount,
+      color: stream.color,
+      isAutoSavings: stream.is_auto_savings === 1,
+      sortOrder: stream.sort_order,
+      createdAt: new Date(stream.created_at),
+      updatedAt: new Date(stream.updated_at)
+    });
+  } catch (error) {
+    console.error('Error updating budget stream:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete a budget stream
+router.delete('/budget/streams/:id', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    
+    // Verify stream belongs to user's budget
+    const budget = await getRow('SELECT * FROM budget_allocations WHERE user_id = ?', [userId]);
+    if (!budget) {
+      return res.status(404).json({ error: 'Budget not found' });
+    }
+    
+    const stream = await getRow('SELECT * FROM budget_streams WHERE id = ? AND budget_id = ?', [id, budget.id]);
+    if (!stream) {
+      return res.status(404).json({ error: 'Stream not found' });
+    }
+    
+    // Don't allow deleting the auto-savings stream
+    if (stream.is_auto_savings === 1) {
+      return res.status(400).json({ error: 'Cannot delete the savings stream' });
+    }
+    
+    await runQuery('DELETE FROM budget_streams WHERE id = ?', [id]);
+    
+    res.json({ message: 'Stream deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting budget stream:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

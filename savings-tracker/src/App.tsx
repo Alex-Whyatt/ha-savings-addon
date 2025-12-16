@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Dashboard from './components/Dashboard';
 import Calendar from './components/Calendar';
 import SavingsPots from './components/SavingsPots';
+import BudgetSankey, { SavingsBreakdown } from './components/BudgetSankey';
 import Login from './components/Login';
 import { AuthProvider, useAuth } from './AuthContext';
 import { useSavingsData } from './hooks/useSavingsData';
@@ -21,9 +22,11 @@ import {
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SavingsIcon from '@mui/icons-material/Savings';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { startOfMonth, endOfMonth, getDay } from 'date-fns';
 
-type ViewType = 'dashboard' | 'calendar' | 'pots';
+type ViewType = 'dashboard' | 'calendar' | 'pots' | 'budget';
 
 const theme = createTheme({
   palette: {
@@ -42,6 +45,93 @@ const AppContent: React.FC = () => {
   const { data, combinedData, projections, refreshData } = useSavingsData(user?.id || null, otherUsers);
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Calculate total recurring monthly and breakdown by pot for the budget sankey
+  // Use current user's data only (not combined) since this represents their salary allocation
+  // This must be before the early return to follow Rules of Hooks
+  const { totalRecurringMonthly, savingsBreakdown } = useMemo(() => {
+    const countWeekdayOccurrencesInMonth = (targetDay: number, month: Date): number => {
+      const monthStart = startOfMonth(month);
+      const monthEnd = endOfMonth(month);
+      let count = 0;
+      const current = new Date(monthStart);
+      
+      while (getDay(current) !== targetDay && current <= monthEnd) {
+        current.setDate(current.getDate() + 1);
+      }
+      
+      while (current <= monthEnd) {
+        count++;
+        current.setDate(current.getDate() + 7);
+      }
+      
+      return count;
+    };
+
+    const now = new Date();
+    
+    // Build a map of pot contributions
+    const potMap = new Map<string, {
+      potId: string;
+      potName: string;
+      potColor: string;
+      monthlyAmount: number;
+      weeklyAmount: number;
+      totalMonthly: number;
+      isWeekly: boolean;
+      isMonthly: boolean;
+    }>();
+
+    // Get pot info from current user's pots only
+    data.pots.forEach(pot => {
+      potMap.set(pot.id, {
+        potId: pot.id,
+        potName: pot.name,
+        potColor: pot.color,
+        monthlyAmount: 0,
+        weeklyAmount: 0,
+        totalMonthly: 0,
+        isWeekly: false,
+        isMonthly: false,
+      });
+    });
+
+    // Calculate monthly recurring by pot (current user only)
+    data.transactions
+      .filter(t => t.repeatMonthly)
+      .forEach(t => {
+        const pot = potMap.get(t.potId);
+        if (pot) {
+          pot.monthlyAmount += t.amount;
+          pot.totalMonthly += t.amount;
+          pot.isMonthly = true;
+        }
+      });
+
+    // Calculate weekly recurring by pot (with monthly equivalent, current user only)
+    data.transactions
+      .filter(t => t.repeatWeekly)
+      .forEach(t => {
+        const pot = potMap.get(t.potId);
+        if (pot) {
+          const dayOfWeek = getDay(t.date);
+          const occurrences = countWeekdayOccurrencesInMonth(dayOfWeek, now);
+          const monthlyEquivalent = t.amount * occurrences;
+          pot.weeklyAmount += t.amount;
+          pot.totalMonthly += monthlyEquivalent;
+          pot.isWeekly = true;
+        }
+      });
+
+    // Filter to only pots with recurring transactions and convert to array
+    const breakdown: SavingsBreakdown[] = Array.from(potMap.values())
+      .filter(pot => pot.totalMonthly > 0)
+      .sort((a, b) => b.totalMonthly - a.totalMonthly);
+
+    const total = breakdown.reduce((sum, pot) => sum + pot.totalMonthly, 0);
+    
+    return { totalRecurringMonthly: total, savingsBreakdown: breakdown };
+  }, [data.transactions, data.pots]);
+
   if (!user) {
     return <Login />;
   }
@@ -51,6 +141,7 @@ const AppContent: React.FC = () => {
       case 'dashboard': return 'Dashboard';
       case 'calendar': return 'Calendar';
       case 'pots': return 'Accounts';
+      case 'budget': return 'Budget';
       default: return 'Dashboard';
     }
   };
@@ -106,7 +197,8 @@ const AppContent: React.FC = () => {
               {[
                 { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
                 { key: 'calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
-                { key: 'pots', label: 'Accounts', icon: <SavingsIcon /> }
+                { key: 'pots', label: 'Accounts', icon: <SavingsIcon /> },
+                { key: 'budget', label: 'Budget', icon: <AccountBalanceWalletIcon /> }
               ].map((item) => (
                 <Box
                   key={item.key}
@@ -209,6 +301,7 @@ const AppContent: React.FC = () => {
             {currentView === 'dashboard' && <DashboardIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
             {currentView === 'calendar' && <CalendarMonthIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
             {currentView === 'pots' && <SavingsIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
+            {currentView === 'budget' && <AccountBalanceWalletIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
           </Box>
           <Box>
             <Typography
@@ -236,6 +329,7 @@ const AppContent: React.FC = () => {
               {currentView === 'dashboard' && 'Overview of your savings progress'}
               {currentView === 'calendar' && 'Track your monthly contributions'}
               {currentView === 'pots' && 'Manage your savings accounts'}
+              {currentView === 'budget' && 'Visualize your salary allocation'}
             </Typography>
           </Box>
         </Box>
@@ -259,6 +353,13 @@ const AppContent: React.FC = () => {
         {currentView === 'pots' && (
           <SavingsPots
             pots={data.pots}
+            onDataChange={refreshData}
+          />
+        )}
+        {currentView === 'budget' && (
+          <BudgetSankey
+            totalRecurringMonthly={totalRecurringMonthly}
+            savingsBreakdown={savingsBreakdown}
             onDataChange={refreshData}
           />
         )}
@@ -313,6 +414,11 @@ const AppContent: React.FC = () => {
               label="Accounts" 
               value="pots" 
               icon={<SavingsIcon />} 
+            />
+            <BottomNavigationAction 
+              label="Budget" 
+              value="budget" 
+              icon={<AccountBalanceWalletIcon />} 
             />
           </BottomNavigation>
         </Paper>

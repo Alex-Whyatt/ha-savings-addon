@@ -17,6 +17,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
+    "@nivo/sankey": "^0.99.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "date-fns": "^3.6.0",

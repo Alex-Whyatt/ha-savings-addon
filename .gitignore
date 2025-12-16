@@ -8,8 +8,7 @@ node_modules/
 dist/
 
 # Database
-/backend/savings.db
-/savings.db
+savings-tracker/backend/savings.db
 
 # Misc
 .DS_Store

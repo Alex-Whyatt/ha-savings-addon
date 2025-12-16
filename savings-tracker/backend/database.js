@@ -90,6 +90,34 @@ function initializeDatabase() {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     )
+  `);
+
+  // Create budget_allocations table (one per user)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS budget_allocations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      net_salary REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+  `);
+
+  // Create budget_streams table (multiple streams per budget allocation)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS budget_streams (
+      id TEXT PRIMARY KEY,
+      budget_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      color TEXT NOT NULL,
+      is_auto_savings INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budget_allocations (id) ON DELETE CASCADE
+    )
   `, (err) => {
     if (err) {
       console.error('Error creating tables:', err.message);

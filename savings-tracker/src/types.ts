@@ -90,3 +90,30 @@ export type CreateExpenseCategory = Omit<
   ExpenseCategory,
   "id" | "userId" | "createdAt" | "updatedAt"
 >;
+
+// Budget allocation for Sankey diagram
+export interface BudgetAllocation {
+  id: string;
+  userId: string;
+  netSalary: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BudgetStream {
+  id: string;
+  budgetId: string;
+  name: string;
+  amount: number;
+  color: string;
+  isAutoSavings: boolean; // True for the auto-populated savings stream
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type CreateBudgetAllocation = Pick<BudgetAllocation, "netSalary">;
+export type CreateBudgetStream = Pick<
+  BudgetStream,
+  "name" | "amount" | "color" | "isAutoSavings" | "sortOrder"
+>;
