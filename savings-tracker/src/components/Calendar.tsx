@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { SavingsData, Transaction, User } from '../types';
 import { addTransaction, deleteTransaction } from '../storage';
 import { getProjectedRecurringTransactions } from '../projections';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, isBefore, startOfDay } from 'date-fns';
 import {
   Card,
   CardContent,
@@ -26,8 +26,9 @@ import {
   Checkbox,
   Avatar
 } from '@mui/material';
-import { ChevronLeft, ChevronRight, Delete, Add } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Delete, Add, Edit } from '@mui/icons-material';
 import { useAuth } from '../AuthContext';
+import { updateTransaction } from '../storage';
 
 interface CalendarProps {
   data: SavingsData;
@@ -37,7 +38,7 @@ interface CalendarProps {
 }
 
 type RecurrenceType = 'none' | 'weekly' | 'monthly';
-type DialogMode = 'view' | 'add';
+type DialogMode = 'view' | 'add' | 'edit';
 
 // Generate a consistent color for a user based on their index
 const getUserColor = (_userId: string, index: number): string => {
@@ -54,6 +55,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
   const [projectedTransactions, setProjectedTransactions] = useState<Transaction[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   // Track which users' data to display (current user always included)
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set([currentUser.id]));
   const [formData, setFormData] = useState({
@@ -149,6 +151,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
 
   const handleBackToView = () => {
     setDialogMode('view');
+    setTransactionToEdit(null);
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -186,18 +189,64 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
     onDataChange();
   };
 
+  const handleEditClick = (transaction: Transaction) => {
+    setTransactionToEdit(transaction);
+    // Determine recurrence type
+    let recurrence: RecurrenceType = 'none';
+    if (transaction.repeatWeekly) recurrence = 'weekly';
+    else if (transaction.repeatMonthly) recurrence = 'monthly';
+    
+    setFormData({
+      potId: transaction.potId,
+      amount: transaction.amount.toString(),
+      description: transaction.description || '',
+      recurrence
+    });
+    setDialogMode('edit');
+  };
+
+  const handleSubmitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!transactionToEdit) return;
+
+    const amount = parseFloat(formData.amount);
+    if (!formData.potId || isNaN(amount) || amount <= 0) {
+      return;
+    }
+
+    await updateTransaction(transactionToEdit.id, {
+      potId: formData.potId,
+      amount,
+      description: formData.description || undefined,
+      repeatMonthly: formData.recurrence === 'monthly',
+      repeatWeekly: formData.recurrence === 'weekly'
+    });
+
+    setDialogMode('view');
+    setTransactionToEdit(null);
+    onDataChange();
+  };
+
   const handleCloseDialog = () => {
     setDialogOpen(false);
     setSelectedDate(null);
     setDialogMode('view');
+    setTransactionToEdit(null);
   };
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
   const selectedDateTransactions = selectedDate ? getTransactionsForDate(selectedDate) : [];
-  const actualTransactionsForDialog = selectedDateTransactions.filter(t => !t.id.startsWith('projected-'));
-  const projectedTransactionsForDialog = selectedDateTransactions.filter(t => t.id.startsWith('projected-'));
+  const isSelectedDatePast = selectedDate ? isBefore(selectedDate, startOfDay(new Date())) : false;
+  // For past days, treat projected as actual (they should have happened)
+  const actualTransactionsForDialog = selectedDateTransactions.filter(t => 
+    !t.id.startsWith('projected-') || isSelectedDatePast
+  );
+  const projectedTransactionsForDialog = selectedDateTransactions.filter(t => 
+    t.id.startsWith('projected-') && !isSelectedDatePast
+  );
 
   return (
     <Box sx={{
@@ -417,11 +466,22 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
             </Box>
           ))}
 
+          {/* Empty cells for days before the 1st of the month to align grid with day headers */}
+          {Array.from({ length: getDay(monthStart) }).map((_, index) => (
+            <Box key={`empty-${index}`} sx={{ p: 1, minHeight: 80 }} />
+          ))}
+
           {calendarDays.map(day => {
           const dayTransactions = getTransactionsForDate(day);
+          const isPastDay = isBefore(day, startOfDay(new Date()));
 
-          const actualTransactions = dayTransactions.filter(t => !t.id.startsWith('projected-'));
-          const projectedTransactionsForDay = dayTransactions.filter(t => t.id.startsWith('projected-'));
+          // For past days, treat projected as actual (they should have happened)
+          const actualTransactions = dayTransactions.filter(t => 
+            !t.id.startsWith('projected-') || isPastDay
+          );
+          const projectedTransactionsForDay = dayTransactions.filter(t => 
+            t.id.startsWith('projected-') && !isPastDay
+          );
 
           const hasActualMonthlyRecurring = actualTransactions.some(t => t.repeatMonthly);
           const hasActualWeeklyRecurring = actualTransactions.some(t => t.repeatWeekly);
@@ -555,6 +615,8 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
         <DialogTitle>
           {dialogMode === 'view' ? (
             selectedDate ? format(selectedDate, 'EEEE, MMMM do, yyyy') : ''
+          ) : dialogMode === 'edit' ? (
+            'Edit Recurring Transaction'
           ) : (
             `Add Transaction - ${selectedDate ? format(selectedDate, 'PPP') : ''}`
           )}
@@ -631,6 +693,17 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                               />
                               {isOwnTransaction && (
                                 <ListItemSecondaryAction>
+                                  {(transaction.repeatWeekly || transaction.repeatMonthly) && (
+                                    <IconButton
+                                      edge="end"
+                                      onClick={() => handleEditClick(transaction)}
+                                      color="primary"
+                                      size="small"
+                                      title="Edit recurring transaction"
+                                    >
+                                      <Edit />
+                                    </IconButton>
+                                  )}
                                   <IconButton
                                     edge="end"
                                     onClick={() => handleDeleteClick(transaction)}
@@ -648,7 +721,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                     </>
                   )}
 
-                  {/* Projected Transactions */}
+                  {/* Projected Transactions (future only - past ones are shown as actual) */}
                   {projectedTransactionsForDialog.length > 0 && (
                     <>
                       <Divider sx={{ my: 2 }} />
@@ -687,7 +760,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                                         }}
                                       />
                                     )}
-                                    <Chip label="Projected" size="small" variant="outlined" />
+                                    <Chip label="Upcoming" size="small" variant="outlined" />
                                   </Box>
                                 }
                                 secondary={
@@ -720,6 +793,87 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
               </Button>
             </DialogActions>
           </>
+        ) : dialogMode === 'edit' ? (
+          <form onSubmit={handleSubmitEdit}>
+            <DialogContent>
+              {transactionToEdit && (transactionToEdit.repeatWeekly || transactionToEdit.repeatMonthly) && (
+                <Box sx={{ 
+                  mb: 2, 
+                  p: 1.5, 
+                  bgcolor: 'info.50', 
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'info.200'
+                }}>
+                  <Typography variant="body2" color="info.main">
+                    ✏️ Changes will apply to <strong>all future occurrences</strong> of this {transactionToEdit.repeatWeekly ? 'weekly' : 'monthly'} payment.
+                  </Typography>
+                </Box>
+              )}
+              <TextField
+                select
+                fullWidth
+                label="Account"
+                value={formData.potId}
+                onChange={(e) => setFormData({...formData, potId: e.target.value})}
+                required
+                sx={{ mb: 2 }}
+              >
+                {data.pots.map(pot => (
+                  <MenuItem key={pot.id} value={pot.id}>
+                    {pot.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                fullWidth
+                label="Amount (£)"
+                type="number"
+                value={formData.amount}
+                onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                placeholder="0.00"
+                required
+                inputProps={{
+                  step: "0.01",
+                  min: "0.01"
+                }}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Description (optional)"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                placeholder="What did you save for?"
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                select
+                fullWidth
+                label="Recurrence"
+                value={formData.recurrence}
+                onChange={(e) => setFormData({...formData, recurrence: e.target.value as RecurrenceType})}
+                helperText="Changing recurrence will affect future projections"
+              >
+                <MenuItem value="none">One-time (no repeat)</MenuItem>
+                <MenuItem value="weekly">
+                  Weekly (every {transactionToEdit ? format(transactionToEdit.date, 'EEEE') : 'week'})
+                </MenuItem>
+                <MenuItem value="monthly">
+                  Monthly (on the {transactionToEdit ? format(transactionToEdit.date, 'do') : 'same date'})
+                </MenuItem>
+              </TextField>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleBackToView}>Cancel</Button>
+              <Button type="submit" variant="contained" color="primary">
+                Save Changes
+              </Button>
+            </DialogActions>
+          </form>
         ) : (
           <form onSubmit={handleSubmitTransaction}>
             <DialogContent>

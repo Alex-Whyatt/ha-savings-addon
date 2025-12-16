@@ -10,14 +10,29 @@ import {
   endOfMonth,
   eachMonthOfInterval,
   addMonths,
-  addWeeks,
   isAfter,
   isBefore,
   isSameMonth,
   getDate,
   getDay,
-  startOfDay,
 } from "date-fns";
+
+// Normalize a date to noon local time to avoid edge cases
+// This ensures consistent date handling regardless of how dates are stored
+export const normalizeToNoon = (date: Date): Date => {
+  const result = new Date(date);
+  result.setHours(12, 0, 0, 0);
+  return result;
+};
+
+// Add weeks while preserving the exact day of week
+// Uses simple arithmetic: add weeks * 7 days
+const addWeeksFromOriginal = (originalDate: Date, weeks: number): Date => {
+  const normalized = normalizeToNoon(originalDate);
+  const result = new Date(normalized);
+  result.setDate(result.getDate() + weeks * 7);
+  return result;
+};
 
 // Count how many times a specific day of week occurs between two dates
 const countWeekdayOccurrences = (
@@ -26,15 +41,17 @@ const countWeekdayOccurrences = (
   targetDay: number
 ): number => {
   let count = 0;
-  let current = new Date(startDate);
+  // Normalize dates to noon to avoid timezone issues
+  let current = normalizeToNoon(new Date(startDate));
+  const end = normalizeToNoon(new Date(endDate));
 
   // Move to first occurrence of target day
-  while (getDay(current) !== targetDay && current <= endDate) {
+  while (getDay(current) !== targetDay && current <= end) {
     current.setDate(current.getDate() + 1);
   }
 
   // Count occurrences
-  while (current <= endDate) {
+  while (current <= end) {
     count++;
     current.setDate(current.getDate() + 7);
   }
@@ -210,7 +227,9 @@ export const getProjectedRecurringTransactions = async (): Promise<
   Transaction[]
 > => {
   const { transactions } = await loadSavingsData();
-  const currentDate = startOfDay(new Date());
+  const currentDate = normalizeToNoon(new Date());
+  // Show projections from start of current month (so past-due ones in current month still show)
+  const monthStart = startOfMonth(currentDate);
   const projectedTransactions: Transaction[] = [];
 
   // Find all monthly recurring transactions
@@ -219,15 +238,17 @@ export const getProjectedRecurringTransactions = async (): Promise<
   );
 
   for (const recurring of monthlyRecurringTransactions) {
-    const recurringDate = recurring.date.getDate(); // Day of month (1-31)
-    let nextDate = new Date(recurring.date);
+    // Normalize the original date to noon and get the day of month
+    const originalDate = normalizeToNoon(new Date(recurring.date));
+    const recurringDayOfMonth = getDate(originalDate); // Day of month (1-31)
 
     // Generate projected recurring transactions for the next 6 months
     for (let i = 1; i <= 6; i++) {
-      nextDate = addMonths(nextDate, 1);
+      // Add months from the original date to ensure consistency
+      const nextDate = normalizeToNoon(addMonths(originalDate, i));
 
-      // Only include future transactions
-      if (!isAfter(startOfDay(nextDate), currentDate)) continue;
+      // Include projections from start of current month (to show past-due ones)
+      if (isBefore(nextDate, monthStart)) continue;
 
       // Check if a transaction already exists for this month
       const existingTransaction = transactions.find(
@@ -235,7 +256,7 @@ export const getProjectedRecurringTransactions = async (): Promise<
           t.potId === recurring.potId &&
           t.repeatMonthly &&
           isSameMonth(t.date, nextDate) &&
-          getDate(t.date) === recurringDate
+          getDate(normalizeToNoon(t.date)) === recurringDayOfMonth
       );
 
       if (!existingTransaction) {
@@ -245,7 +266,7 @@ export const getProjectedRecurringTransactions = async (): Promise<
           userId: recurring.userId,
           potId: recurring.potId,
           amount: recurring.amount,
-          date: new Date(nextDate),
+          date: nextDate,
           description: recurring.description,
           repeatMonthly: true,
           createdAt: recurring.createdAt,
@@ -260,14 +281,18 @@ export const getProjectedRecurringTransactions = async (): Promise<
   );
 
   for (const recurring of weeklyRecurringTransactions) {
-    let nextDate = new Date(recurring.date);
+    // Normalize the original transaction date to noon to avoid timezone issues
+    const originalDate = normalizeToNoon(new Date(recurring.date));
 
     // Generate projected weekly transactions for the next 26 weeks (6 months)
     for (let i = 1; i <= 26; i++) {
-      nextDate = addWeeks(nextDate, 1);
+      // Calculate the next occurrence by adding weeks from the original date
+      // This ensures we always land on the same day of the week
+      const nextDate = addWeeksFromOriginal(originalDate, i);
 
-      // Only include future transactions
-      if (!isAfter(startOfDay(nextDate), currentDate)) continue;
+      // Include projections from start of current month (to show past-due ones)
+      // Skip dates before the start of this month
+      if (isBefore(nextDate, monthStart)) continue;
 
       // Create a projected transaction for display only
       projectedTransactions.push({
@@ -275,7 +300,7 @@ export const getProjectedRecurringTransactions = async (): Promise<
         userId: recurring.userId,
         potId: recurring.potId,
         amount: recurring.amount,
-        date: new Date(nextDate),
+        date: nextDate,
         description: recurring.description,
         repeatWeekly: true,
         createdAt: recurring.createdAt,
