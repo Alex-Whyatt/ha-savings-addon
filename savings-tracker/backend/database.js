@@ -118,6 +118,20 @@ function initializeDatabase() {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (budget_id) REFERENCES budget_allocations (id) ON DELETE CASCADE
     )
+  `);
+
+  // Create processed_recurring table to track which recurring transaction instances have been auto-processed
+  db.run(`
+    CREATE TABLE IF NOT EXISTS processed_recurring (
+      id TEXT PRIMARY KEY,
+      original_transaction_id TEXT NOT NULL,
+      instance_date TEXT NOT NULL,
+      new_transaction_id TEXT NOT NULL,
+      processed_at TEXT NOT NULL,
+      FOREIGN KEY (original_transaction_id) REFERENCES transactions (id) ON DELETE CASCADE,
+      FOREIGN KEY (new_transaction_id) REFERENCES transactions (id) ON DELETE CASCADE,
+      UNIQUE(original_transaction_id, instance_date)
+    )
   `, (err) => {
     if (err) {
       console.error('Error creating tables:', err.message);

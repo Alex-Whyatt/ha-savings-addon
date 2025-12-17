@@ -11,6 +11,8 @@ A modern, mobile-friendly savings tracker that runs directly on your Home Assist
 - 👥 **Multi-user** — Track savings for multiple household members
 - 📱 **Mobile-first** — Responsive design with bottom navigation on mobile
 - 🔒 **Private** — All data stays on your Home Assistant system
+- ⏰ **Auto-Processing** — Recurring transactions are automatically applied daily
+- 🔔 **Notifications** — Get notified via Home Assistant when savings are updated
 
 ## 📦 Installation
 
@@ -55,6 +57,62 @@ users:
 
 **Note**: Changing the configuration will add new users on restart but **will not remove existing users** or their data. This ensures your savings history is preserved.
 
+### Scheduler (Auto-Processing)
+
+The scheduler automatically processes recurring transactions at a specified time each day. When a recurring transaction is due, it:
+1. Creates an actual transaction record
+2. Updates the savings account total
+3. Sends a notification (if enabled)
+
+```yaml
+scheduler:
+  enabled: true          # Enable/disable automatic processing
+  cron: "0 8 * * *"      # When to run (default: 8:00 AM daily)
+```
+
+| Field | Description |
+|-------|-------------|
+| `enabled` | Set to `true` to enable automatic processing |
+| `cron` | Standard cron expression for when to run |
+
+Common cron examples:
+- `0 8 * * *` — 8:00 AM every day (default)
+- `0 6 * * *` — 6:00 AM every day
+- `0 0 * * *` — Midnight every day
+- `0 */6 * * *` — Every 6 hours
+
+### Notifications
+
+Get notified via Home Assistant when recurring transactions are processed. This uses Home Assistant's native notification system.
+
+```yaml
+notifications:
+  enabled: true
+  services:
+    - user_id: "alex"
+      service: "mobile_app_pixel_9a"
+    - user_id: "beth"
+      service: "mobile_app_iphone"
+  default_service: "mobile_app_pixel_9a"
+```
+
+| Field | Description |
+|-------|-------------|
+| `enabled` | Set to `true` to enable notifications |
+| `services` | Map each user to their notification service |
+| `default_service` | Fallback service if user-specific not found |
+
+**Finding your notification service name:**
+1. Go to **Developer Tools** → **Services** in Home Assistant
+2. Search for `notify.`
+3. Look for services like `notify.mobile_app_your_device`
+
+**Example notification:**
+> 💰 **Savings Updated**
+> 
+> £100.00 added to Cash ISA
+> New total: £5,250.00
+
 ### Automatic Setup
 
 The add-on automatically:
@@ -96,6 +154,7 @@ Your main overview showing:
 
 The add-on provides a REST API for advanced integrations:
 
+### Data Endpoints
 ```
 GET  /api/data              — All savings data
 GET  /api/user/data         — Current user's data
@@ -107,6 +166,14 @@ GET  /api/transactions      — List all transactions
 POST /api/transactions      — Create transaction
 PUT  /api/transactions/:id  — Update transaction
 DELETE /api/transactions/:id — Delete transaction
+```
+
+### Scheduler Endpoints
+```
+GET  /api/scheduler/status          — Get scheduler and notification status
+POST /api/scheduler/process         — Manually trigger processing now
+POST /api/scheduler/test-notification — Test notification to current user
+GET  /api/scheduler/history         — Get processing history
 ```
 
 ## 🔍 Troubleshooting
@@ -151,10 +218,12 @@ The add-on will show available updates in the Home Assistant add-on store. Updat
 
 ## 💡 Tips
 
-- **Recurring transactions**: Set up monthly standing orders to automatically project future savings
+- **Recurring transactions**: Set up monthly standing orders — they'll be automatically processed on the due date to reflect real transactions
 - **Colour coding**: Use different colours for different account types (e.g., blue for ISAs, green for investments)
 - **Goals**: Set realistic targets to track progress towards specific savings milestones
-- **Regular updates**: Log transactions regularly for accurate projections
+- **Notifications**: Enable notifications to get daily updates when your savings grow
+- **Manual processing**: Use the API endpoint `/api/scheduler/process` to trigger processing immediately
+- **Check status**: Use `/api/scheduler/status` to see what's scheduled and recently processed
 
 ## 🆘 Support
 

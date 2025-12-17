@@ -1,6 +1,8 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { runQuery, getRow, getAllRows } = require('./database');
+const { processRecurringTransactions, runProcessingCycle } = require('./scheduler');
+const { testNotification, getNotificationConfig } = require('./notifications');
 
 const router = express.Router();
 
@@ -1051,6 +1053,138 @@ router.delete('/budget/streams/:id', requireAuth, async (req, res) => {
     res.json({ message: 'Stream deleted successfully' });
   } catch (error) {
     console.error('Error deleting budget stream:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==================== Scheduler & Notifications Routes ====================
+// Admin routes for managing recurring transaction processing
+
+// Get scheduler/notification status
+router.get('/scheduler/status', requireAuth, async (req, res) => {
+  try {
+    const notificationConfig = getNotificationConfig();
+    
+    // Get count of pending recurring transactions for today
+    const today = new Date();
+    const todayDayOfWeek = today.getDay();
+    const todayDayOfMonth = today.getDate();
+    
+    const recurringTransactions = await getAllRows(
+      `SELECT t.*, sp.name as pot_name, u.name as user_name
+       FROM transactions t
+       JOIN savings_pots sp ON t.pot_id = sp.id
+       JOIN users u ON t.user_id = u.id
+       WHERE t.repeat_monthly = 1 OR t.repeat_weekly = 1`
+    );
+    
+    // Count how many would be due today
+    let dueTodayCount = 0;
+    for (const tx of recurringTransactions) {
+      const txDate = new Date(tx.date);
+      if (tx.repeat_weekly === 1 && txDate.getDay() === todayDayOfWeek) {
+        dueTodayCount++;
+      }
+      if (tx.repeat_monthly === 1 && txDate.getDate() === todayDayOfMonth) {
+        dueTodayCount++;
+      }
+    }
+    
+    // Get recently processed records
+    const recentlyProcessed = await getAllRows(
+      `SELECT pr.*, t.description, t.amount, sp.name as pot_name
+       FROM processed_recurring pr
+       JOIN transactions t ON pr.original_transaction_id = t.id
+       JOIN savings_pots sp ON t.pot_id = sp.id
+       ORDER BY pr.processed_at DESC
+       LIMIT 20`
+    );
+    
+    res.json({
+      notifications: notificationConfig,
+      scheduler: {
+        recurringCount: recurringTransactions.length,
+        dueToday: dueTodayCount,
+        cronSchedule: process.env.SCHEDULER_CRON || '0 6 * * *'
+      },
+      recentlyProcessed: recentlyProcessed.map(r => ({
+        id: r.id,
+        description: r.description,
+        amount: r.amount,
+        potName: r.pot_name,
+        instanceDate: r.instance_date,
+        processedAt: r.processed_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting scheduler status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Manually trigger processing of recurring transactions
+router.post('/scheduler/process', requireAuth, async (req, res) => {
+  try {
+    console.log('🔧 Manual processing triggered by user:', req.user.name);
+    
+    const results = await runProcessingCycle();
+    
+    res.json({
+      success: true,
+      message: `Processed ${results.processed.length} transaction(s)`,
+      results
+    });
+  } catch (error) {
+    console.error('Error in manual processing:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// Test notification to a specific user
+router.post('/scheduler/test-notification', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log('🧪 Testing notification for user:', userId);
+    
+    const result = await testNotification(userId);
+    
+    res.json({
+      success: result.success,
+      userId,
+      result
+    });
+  } catch (error) {
+    console.error('Error testing notification:', error);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
+// Get processed recurring history for current user
+router.get('/scheduler/history', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const history = await getAllRows(
+      `SELECT pr.*, t.description, t.amount, sp.name as pot_name
+       FROM processed_recurring pr
+       JOIN transactions t ON pr.original_transaction_id = t.id
+       JOIN savings_pots sp ON t.pot_id = sp.id
+       WHERE t.user_id = ?
+       ORDER BY pr.processed_at DESC
+       LIMIT 50`,
+      [userId]
+    );
+    
+    res.json(history.map(r => ({
+      id: r.id,
+      description: r.description,
+      amount: r.amount,
+      potName: r.pot_name,
+      instanceDate: r.instance_date,
+      processedAt: r.processed_at
+    })));
+  } catch (error) {
+    console.error('Error getting processing history:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

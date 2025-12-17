@@ -1,8 +1,8 @@
 ---
 name: Savings Tracker
-version: "1.0.27"
+version: "1.1.0"
 slug: savings-tracker
-description: A modern web-based savings tracker with calendar interface and progress visualization
+description: A modern web-based savings tracker with calendar interface, automatic recurring transaction processing, and Home Assistant notifications
 url: "https://github.com/Alex-Whyatt/ha-savings-addon"
 arch:
   - aarch64
@@ -12,15 +12,37 @@ init: false
 ingress: true
 ingress_port: 80
 panel_icon: "mdi:cash-multiple"
+
+# Enable Home Assistant API access for notifications
+homeassistant_api: true
+
 map:
   - data:rw
+
 options:
   users:
     - id: "alex"
       name: "Alex"
     - id: "beth"
       name: "Beth"
+  scheduler:
+    enabled: true
+    cron: "0 8 * * *"
+  notifications:
+    enabled: false
+    services: []
+    default_service: ""
+
 schema:
   users:
     - id: str
       name: str
+  scheduler:
+    enabled: bool
+    cron: str
+  notifications:
+    enabled: bool
+    services:
+      - user_id: str
+        service: str
+    default_service: str?

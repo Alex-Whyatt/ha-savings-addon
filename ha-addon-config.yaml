@@ -1,8 +1,8 @@
 ---
 name: "Savings Tracker"
-version: "1.0.0"
+version: "1.1.0"
 slug: "savings-tracker"
-description: "A web-based savings tracker for monitoring your savings goals"
+description: "A web-based savings tracker with automatic recurring transaction processing and Home Assistant notifications"
 url: "https://github.com/your-repo/savings-tracker"
 arch:
   - aarch64
@@ -22,9 +22,12 @@ ingress_port: 0
 panel_icon: "mdi:cash-multiple"
 panel_title: "Savings Tracker"
 panel_admin: false
-homeassistant_api: false
+
+# Enable Home Assistant API access for notifications
+homeassistant_api: true
 hassio_api: false
 auth_api: false
+
 host_network: false
 privileged: []
 devices: []
@@ -37,6 +40,38 @@ map:
   - addons:rw
   - share:rw
   - backup:rw
-options: {}
-schema: {}
+
+# Configuration options
+options:
+  users:
+    - id: "alex"
+      name: "Alex"
+      email: "alex@example.com"
+    - id: "beth"
+      name: "Beth"
+      email: "beth@example.com"
+  scheduler:
+    enabled: true
+    cron: "0 6 * * *"
+  notifications:
+    enabled: false
+    services: {}
+    default_service: ""
+
+# Schema for configuration validation
+schema:
+  users:
+    - id: str
+      name: str
+      email: str?
+  scheduler:
+    enabled: bool
+    cron: str
+  notifications:
+    enabled: bool
+    services:
+      - user_id: str
+        service: str
+    default_service: str?
+
 image: "your-registry/savings-tracker-{arch}"
