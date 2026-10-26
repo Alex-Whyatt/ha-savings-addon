@@ -1,11 +1,26 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import Dashboard from './Dashboard'
+import { useAuth } from '../AuthContext'
 import { SavingsData, SavingsProjection, User } from '../types'
+
+// Dashboard reads otherUsers from AuthContext; mock it so tests don't need the
+// real AuthProvider (which fetches users and session state from the API)
+vi.mock('../AuthContext', () => ({
+  useAuth: vi.fn()
+}))
 
 // Mock the child components
 vi.mock('./SavingsPotCard', () => ({
   default: ({ pot }: { pot: any }) => <div data-testid={`pot-${pot.id}`}>{pot.name}</div>
+}))
+
+vi.mock('./UpcomingSpends', () => ({
+  default: () => <div data-testid="upcoming-spends" />
+}))
+
+vi.mock('./RecurringExpenses', () => ({
+  default: () => <div data-testid="recurring-expenses" />
 }))
 
 vi.mock('./ProjectionChart', () => ({
@@ -112,15 +127,22 @@ describe('Dashboard', () => {
 
   const mockOnDataChange = vi.fn()
 
+  const allUsers = [mockUser, mockOtherUser]
+
+  const renderDashboard = (props: { data: SavingsData; projections: SavingsProjection[]; currentUser: User }) => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: props.currentUser,
+      allUsers,
+      otherUsers: allUsers.filter(u => u.id !== props.currentUser.id),
+      login: vi.fn(),
+      logout: vi.fn(),
+      isLoading: false
+    })
+    return render(<Dashboard {...props} onDataChange={mockOnDataChange} />)
+  }
+
   it('should display both users\' pots when Alex is logged in', () => {
-    render(
-      <Dashboard
-        data={mockData}
-        projections={mockProjections}
-        onDataChange={mockOnDataChange}
-        currentUser={mockUser}
-      />
-    )
+    renderDashboard({ data: mockData, projections: mockProjections, currentUser: mockUser })
 
     // Check that Alex's pots are displayed
     expect(screen.getByTestId('pot-pot1')).toBeInTheDocument()
@@ -131,19 +153,12 @@ describe('Dashboard', () => {
     expect(screen.getByTestId('pot-pot4')).toBeInTheDocument()
 
     // Check section headers
-    expect(screen.getByText("Your Savings Pots")).toBeInTheDocument()
-    expect(screen.getByText("Beth's Savings Pots")).toBeInTheDocument()
+    expect(screen.getByText("Your Accounts")).toBeInTheDocument()
+    expect(screen.getByText("Beth's Accounts")).toBeInTheDocument()
   })
 
   it('should display both users\' pots when Beth is logged in', () => {
-    render(
-      <Dashboard
-        data={mockData}
-        projections={mockProjections}
-        onDataChange={mockOnDataChange}
-        currentUser={mockOtherUser}
-      />
-    )
+    renderDashboard({ data: mockData, projections: mockProjections, currentUser: mockOtherUser })
 
     // Check that Beth's pots are displayed
     expect(screen.getByTestId('pot-pot3')).toBeInTheDocument()
@@ -154,50 +169,29 @@ describe('Dashboard', () => {
     expect(screen.getByTestId('pot-pot2')).toBeInTheDocument()
 
     // Check section headers
-    expect(screen.getByText("Your Savings Pots")).toBeInTheDocument()
-    expect(screen.getByText("Alex's Savings Pots")).toBeInTheDocument()
+    expect(screen.getByText("Your Accounts")).toBeInTheDocument()
+    expect(screen.getByText("Alex's Accounts")).toBeInTheDocument()
   })
 
   it('should show correct total savings and active pots count', () => {
-    render(
-      <Dashboard
-        data={mockData}
-        projections={mockProjections}
-        onDataChange={mockOnDataChange}
-        currentUser={mockUser}
-      />
-    )
+    renderDashboard({ data: mockData, projections: mockProjections, currentUser: mockUser })
 
     // Total savings should be sum of all pots: 500 + 200 + 800 + 300 = 1800
-    expect(screen.getByText('£1800.00')).toBeInTheDocument()
+    expect(screen.getByText('£1,800.00')).toBeInTheDocument()
 
     // Active pots should be 4
     expect(screen.getByText('4')).toBeInTheDocument()
   })
 
   it('should show projections chart when projections are available', () => {
-    render(
-      <Dashboard
-        data={mockData}
-        projections={mockProjections}
-        onDataChange={mockOnDataChange}
-        currentUser={mockUser}
-      />
-    )
+    renderDashboard({ data: mockData, projections: mockProjections, currentUser: mockUser })
 
     expect(screen.getByTestId('projection-chart')).toBeInTheDocument()
     expect(screen.getByText('Savings Projections')).toBeInTheDocument()
   })
 
   it('should not show projections chart when no projections are available', () => {
-    render(
-      <Dashboard
-        data={mockData}
-        projections={[]}
-        onDataChange={mockOnDataChange}
-        currentUser={mockUser}
-      />
-    )
+    renderDashboard({ data: mockData, projections: [], currentUser: mockUser })
 
     expect(screen.queryByTestId('projection-chart')).not.toBeInTheDocument()
     expect(screen.queryByText('Savings Projections')).not.toBeInTheDocument()
@@ -209,20 +203,13 @@ describe('Dashboard', () => {
       transactions: mockTransactions.filter(t => t.userId === 'beth')
     }
 
-    render(
-      <Dashboard
-        data={emptyData}
-        projections={[]}
-        onDataChange={mockOnDataChange}
-        currentUser={mockUser}
-      />
-    )
+    renderDashboard({ data: emptyData, projections: [], currentUser: mockUser })
 
     // Should show Beth's pots
     expect(screen.getByTestId('pot-pot3')).toBeInTheDocument()
     expect(screen.getByTestId('pot-pot4')).toBeInTheDocument()
 
     // Should show empty state for Alex's pots
-    expect(screen.getByText("No savings pots yet. Create your first pot to get started!")).toBeInTheDocument()
+    expect(screen.getByText("No accounts yet. Add your first account to get started!")).toBeInTheDocument()
   })
 })
