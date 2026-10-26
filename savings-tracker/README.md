@@ -21,7 +21,7 @@ A modern, mobile-friendly savings tracker that runs directly on your Home Assist
 1. In Home Assistant, navigate to **Settings** → **Add-ons** → **Add-on Store**
 2. Click the **⋮** menu (three dots) in the top-right corner
 3. Select **Repositories**
-4. Add the repository URL and click **Add**
+4. Add `https://github.com/Alex-Whyatt/ha-savings-addon` and click **Add**
 
 ### Step 2: Install the Add-on
 
@@ -117,7 +117,7 @@ notifications:
 
 The add-on automatically:
 
-- Creates a persistent SQLite database in `/config/savings-tracker/`
+- Creates a persistent SQLite database in the add-on's data folder (`/data`)
 - Sets up the web interface on the configured port
 - Configures ingress routing for seamless Home Assistant integration
 
@@ -125,7 +125,7 @@ The add-on automatically:
 
 | Item | Location |
 |------|----------|
-| Database | `/config/savings-tracker/savings.db` |
+| Database | `/data/savings.db` (add-on data folder) |
 | Persistence | Data survives restarts and updates |
 | Backups | Included in Home Assistant backups |
 
@@ -194,8 +194,8 @@ GET  /api/scheduler/history         — Get processing history
 
 ### Data Not Saving
 
-1. Verify the database file exists: `/config/savings-tracker/savings.db`
-2. Check the add-on has write permissions to `/config`
+1. Check the add-on logs for database errors at startup
+2. The database lives at `/data/savings.db` inside the add-on
 3. Review Home Assistant logs for database-related errors
 4. Try restarting the add-on
 

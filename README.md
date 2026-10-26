@@ -57,7 +57,7 @@ The app features a modern, mobile-first design with:
 1. **Add the repository** to your Home Assistant add-on store:
    - Go to **Settings** → **Add-ons** → **Add-on Store**
    - Click the **⋮** menu → **Repositories**
-   - Add: `https://github.com/Alex-Whyatt/savings-tracker`
+   - Add: `https://github.com/Alex-Whyatt/ha-savings-addon`
 
 2. **Install the add-on**:
    - Find "Savings Tracker" in the add-on store
@@ -69,17 +69,19 @@ The app features a modern, mobile-first design with:
 
 ### Standalone Docker
 
+The image is built for the Home Assistant base image, so pass one as `BUILD_FROM`:
+
 ```bash
 # Clone the repository
-git clone https://github.com/Alex-Whyatt/savings-tracker.git
-cd savings-tracker/savings-tracker
+git clone https://github.com/Alex-Whyatt/ha-savings-addon.git
+cd ha-savings-addon/savings-tracker
 
-# Build and run with Docker
-docker build -t savings-tracker .
-docker run -p 3001:3001 -v savings-data:/data savings-tracker
+# Build and run with Docker (use amd64-base on x86 machines)
+docker build --build-arg BUILD_FROM=ghcr.io/home-assistant/aarch64-base:latest -t savings-tracker .
+docker run -p 8080:80 -v savings-data:/data savings-tracker
 ```
 
-Access the app at `http://localhost:3001`
+Access the app at `http://localhost:8080`
 
 ## 🛠️ Technology Stack
 
@@ -104,13 +106,15 @@ savings-tracker/
 
 ## 🔧 Configuration
 
-The add-on requires no manual configuration. It automatically:
+Household users, the daily scheduler for recurring transactions, and Home Assistant notifications are set in the add-on's **Configuration** tab. See the [add-on README](savings-tracker/README.md) for the options.
+
+The add-on also automatically:
 - Creates a persistent SQLite database
 - Configures the web interface
 - Sets up ingress routing for Home Assistant
 
 ### Data Storage
-- **Database location**: `/config/savings-tracker/savings.db`
+- **Database location**: `/data/savings.db` (the add-on's private data folder)
 - **Persistence**: Data survives add-on restarts and updates
 - **Backups**: Included in Home Assistant's backup system
 
@@ -140,6 +144,5 @@ The backend exposes a REST API:
 - Check ingress is enabled in add-on settings
 
 ### Data not saving
-- Verify database exists at `/config/savings-tracker/savings.db`
-- Check add-on has write permissions to `/config`
-- Review logs for database errors
+- Check the add-on logs for database errors at startup
+- The database lives at `/data/savings.db` inside the add-on
