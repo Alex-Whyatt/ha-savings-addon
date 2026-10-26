@@ -22,12 +22,14 @@ import {
   ListItemSecondaryAction,
   Divider,
   Chip,
-  FormControlLabel,
-  Checkbox,
-  Avatar
+  Avatar,
+  ButtonBase,
+  useMediaQuery,
+  useTheme
 } from '@mui/material';
-import { ChevronLeft, ChevronRight, Delete, Add, Edit } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Delete, Add, Edit, Repeat } from '@mui/icons-material';
 import { useAuth } from '../AuthContext';
+import { seriesColors } from '../theme';
 import { updateTransaction } from '../storage';
 
 interface CalendarProps {
@@ -42,13 +44,15 @@ type DialogMode = 'view' | 'add' | 'edit';
 
 // Generate a consistent color for a user based on their index
 const getUserColor = (_userId: string, index: number): string => {
-  const colors = ['#667eea', '#e91e63', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+  const colors = seriesColors;
   return colors[index % colors.length];
 };
 
 const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, currentUser }) => {
   const { otherUsers, allUsers } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<DialogMode>('view');
@@ -256,111 +260,50 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
     }}>
       <Card sx={{
         width: '100%',
-        maxWidth: '900px',
+        maxWidth: 1100,
         overflow: 'hidden'
       }}>
         <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
-        {/* User Filter Checkboxes */}
+        {/* Whose contributions to show */}
         {otherUsers.length > 0 && (
-          <Box sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: { xs: 1, sm: 2 },
-            mb: 2,
-            p: 1.5,
-            bgcolor: 'grey.50',
-            borderRadius: 2,
-            alignItems: 'center'
-          }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mr: 1, fontWeight: 500 }}>
-              Show:
-            </Typography>
-            {/* Current user (always checked, disabled) */}
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={true}
-                  disabled
-                  size="small"
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, alignItems: 'center' }} role="group" aria-label="Show contributions for">
+            {[currentUser, ...otherUsers].map(u => {
+              const isSelf = u.id === currentUser.id;
+              const selected = isSelf || selectedUserIds.has(u.id);
+              return (
+                <Chip
+                  key={u.id}
+                  label={isSelf ? `${u.name} (you)` : u.name}
+                  onClick={isSelf ? undefined : () => toggleUserSelection(u.id)}
+                  aria-pressed={selected}
+                  avatar={<Box component="span" sx={{ width: '10px !important', height: '10px !important', borderRadius: '50%', bgcolor: userColorMap.get(u.id), ml: '10px !important' }} />}
+                  variant={selected ? 'filled' : 'outlined'}
                   sx={{
-                    color: userColorMap.get(currentUser.id),
-                    '&.Mui-checked': { color: userColorMap.get(currentUser.id) },
-                    '&.Mui-disabled': { color: userColorMap.get(currentUser.id) }
+                    height: 36,
+                    borderRadius: 999,
+                    px: 0.5,
+                    bgcolor: selected ? 'action.hover' : 'transparent',
+                    color: selected ? 'text.primary' : 'text.secondary'
                   }}
                 />
-              }
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <Avatar
-                    sx={{
-                      width: 20,
-                      height: 20,
-                      fontSize: '0.7rem',
-                      bgcolor: userColorMap.get(currentUser.id)
-                    }}
-                  >
-                    {currentUser.name.charAt(0)}
-                  </Avatar>
-                  <Typography variant="body2">{currentUser.name} (You)</Typography>
-                </Box>
-              }
-              sx={{ mr: 2 }}
-            />
-            {/* Other users */}
-            {otherUsers.map(user => (
-              <FormControlLabel
-                key={user.id}
-                control={
-                  <Checkbox
-                    checked={selectedUserIds.has(user.id)}
-                    onChange={() => toggleUserSelection(user.id)}
-                    size="small"
-                    sx={{
-                      color: userColorMap.get(user.id),
-                      '&.Mui-checked': { color: userColorMap.get(user.id) }
-                    }}
-                  />
-                }
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Avatar
-                      sx={{
-                        width: 20,
-                        height: 20,
-                        fontSize: '0.7rem',
-                        bgcolor: selectedUserIds.has(user.id) ? userColorMap.get(user.id) : 'grey.400'
-                      }}
-                    >
-                      {user.name.charAt(0)}
-                    </Avatar>
-                    <Typography variant="body2">{user.name}</Typography>
-                  </Box>
-                }
-                sx={{ mr: 2 }}
-              />
-            ))}
+              );
+            })}
           </Box>
         )}
 
-        <Box sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 2,
-          flexWrap: 'wrap',
-          gap: 1
-        }}>
-          <IconButton onClick={prevMonth} size="small">
-            <ChevronLeft />
-          </IconButton>
-          <Typography
-            variant="h5"
-            component="h2"
-            sx={{ fontSize: { xs: '1.2rem', sm: '1.5rem' } }}
-          >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Typography variant="h6" component="h2" sx={{ flexGrow: 1, fontSize: { xs: '1.125rem', sm: '1.375rem' } }}>
             {format(currentMonth, 'MMMM yyyy')}
           </Typography>
-          <IconButton onClick={nextMonth} size="small">
+          {!isSameMonth(currentMonth, new Date()) && (
+            <Button variant="outlined" size="small" onClick={() => setCurrentMonth(new Date())} sx={{ borderColor: 'divider', color: 'text.primary' }}>
+              Today
+            </Button>
+          )}
+          <IconButton onClick={prevMonth} aria-label="Previous month" sx={{ border: 1, borderColor: 'divider', borderRadius: 2.5 }}>
+            <ChevronLeft />
+          </IconButton>
+          <IconButton onClick={nextMonth} aria-label="Next month" sx={{ border: 1, borderColor: 'divider', borderRadius: 2.5 }}>
             <ChevronRight />
           </IconButton>
         </Box>
@@ -373,9 +316,9 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
             gap: 2,
             mb: 2,
             p: 2,
-            bgcolor: 'white',
+            bgcolor: 'background.paper',
             border: '1px solid',
-            borderColor: 'grey.200',
+            borderColor: 'divider',
             borderRadius: 2
           }}>
             {Array.from(selectedUserIds).map(userId => {
@@ -389,7 +332,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
               );
               const actualTotal = userTransactions.reduce((sum, t) => sum + t.amount, 0);
               const projectedTotal = userProjected.reduce((sum, t) => sum + t.amount, 0);
-              const userColor = userColorMap.get(userId) || 'grey.500';
+              const userColor = userColorMap.get(userId) || 'text.secondary';
               
               return (
                 <Box key={userId} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -408,20 +351,20 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                       {getUserName(userId)}
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
-                      <span style={{ color: '#4caf50' }}>£{actualTotal.toFixed(0)}</span>
+                      <span>£{actualTotal.toFixed(0)}</span>
                       {projectedTotal > 0 && (
-                        <span style={{ color: '#667eea', fontStyle: 'italic' }}> + £{projectedTotal.toFixed(0)}</span>
+                        <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}> + £{projectedTotal.toFixed(0)} to come</Box>
                       )}
                     </Typography>
                   </Box>
                 </Box>
               );
             })}
-            <Box sx={{ borderLeft: '1px solid', borderColor: 'grey.300', pl: 2, ml: 1 }}>
+            <Box sx={{ borderLeft: '1px solid', borderColor: 'divider', pl: 2, ml: 1 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
                 Combined
               </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 'bold', lineHeight: 1.2, color: 'primary.main' }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
                 £{activeData.transactions
                   .filter(t => isSameMonth(t.date, currentMonth))
                   .reduce((sum, t) => sum + t.amount, 0)
@@ -430,13 +373,13 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                   selectedUserIds.has(t.userId) && 
                   isSameMonth(t.date, currentMonth)
                 ).reduce((sum, t) => sum + t.amount, 0) > 0 && (
-                  <span style={{ fontStyle: 'italic' }}>
+                  <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>
                     {' + £'}
                     {projectedTransactions
                       .filter(t => selectedUserIds.has(t.userId) && isSameMonth(t.date, currentMonth))
                       .reduce((sum, t) => sum + t.amount, 0)
                       .toFixed(0)}
-                  </span>
+                  </Box>
                 )}
               </Typography>
             </Box>
@@ -446,20 +389,22 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: 1,
-            mb: 2
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+            gap: { xs: 0.5, sm: 0.75 },
+            mb: 1
           }}
         >
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
             <Box
               key={day}
               sx={{
-                p: 1,
+                py: 0.5,
                 textAlign: 'center',
-                fontWeight: 'bold',
-                color: 'text.secondary',
-                bgcolor: 'grey.100'
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'text.secondary'
               }}
             >
               {day}
@@ -468,7 +413,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
 
           {/* Empty cells for days before the 1st of the month to align grid with day headers */}
           {Array.from({ length: getDay(monthStart) }).map((_, index) => (
-            <Box key={`empty-${index}`} sx={{ p: 1, minHeight: 80 }} />
+            <Box key={`empty-${index}`} />
           ))}
 
           {calendarDays.map(day => {
@@ -507,111 +452,105 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
           const projectedTotal = projectedTransactionsForDay.reduce((sum, t) => sum + t.amount, 0);
           const showMultiUser = selectedUserIds.size > 1;
 
+          const isToday = isSameDay(day, new Date());
+          const userEntries = Array.from(totalsByUser.entries());
+          const transactionCount = actualTransactions.length + projectedTransactionsForDay.length;
+          const compact = (value: number) => `£${value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
+
           return (
-            <Box
+            <ButtonBase
               key={day.toISOString()}
               onClick={() => handleDateClick(day)}
+              aria-label={`${format(day, 'EEEE d MMMM')}${transactionCount ? `, ${transactionCount} contribution${transactionCount > 1 ? 's' : ''}` : ''}`}
               sx={{
-                p: 1,
-                minHeight: 80,
-                cursor: 'pointer',
+                p: { xs: 0.5, sm: 1 },
+                minHeight: { xs: 64, sm: 104 },
+                borderRadius: { xs: 1.5, sm: 2.5 },
                 border: '1px solid',
-                borderColor: 'grey.200',
-                bgcolor: !isSameMonth(day, currentMonth) ? 'grey.50' : 'white',
-                '&:hover': {
-                  bgcolor: 'action.hover'
-                },
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                '&:hover': { bgcolor: 'action.hover' },
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                justifyContent: 'flex-start',
+                gap: 0.5,
+                minWidth: 0,
+                textAlign: 'left'
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+              <Box sx={{
+                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                fontWeight: 600,
+                width: { xs: 22, sm: 26 },
+                height: { xs: 22, sm: 26 },
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                alignSelf: { xs: 'center', sm: 'flex-start' },
+                ...(isToday && { bgcolor: 'primary.main', color: 'primary.contrastText' })
+              }}>
                 {format(day, 'd')}
-              </Typography>
+              </Box>
 
-              {/* Show user-colored indicators when multiple users selected */}
-              {showMultiUser && totalsByUser.size > 0 ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                  {Array.from(totalsByUser.entries()).map(([userId, totals]) => (
-                    <Box key={userId} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: userColorMap.get(userId) || 'grey.500',
-                          flexShrink: 0
-                        }}
-                      />
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontWeight: 'bold',
-                          color: totals.actual > 0 ? 'success.main' : 'text.secondary',
-                          fontSize: '0.7rem'
-                        }}
-                      >
-                        {totals.actual > 0 && `£${totals.actual.toFixed(0)}`}
-                        {totals.actual > 0 && totals.projected > 0 && ' + '}
-                        {totals.projected > 0 && (
-                          <span style={{ fontStyle: 'italic', color: '#667eea' }}>
-                            £{totals.projected.toFixed(0)}
-                          </span>
-                        )}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              ) : (
-                <>
-                  {/* Single user view - show actual transactions */}
-                  {actualTotal > 0 && (
-                    <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
-                      £{actualTotal.toFixed(2)}
-                    </Typography>
-                  )}
-
-                  {/* Show projected transactions with different styling */}
-                  {projectedTotal > 0 && (
-                    <Typography variant="body2" sx={{ color: 'primary.main', fontStyle: 'italic', fontSize: '0.75rem' }}>
-                      +£{projectedTotal.toFixed(2)} projected
-                    </Typography>
-                  )}
-                </>
-              )}
-
-              {(actualTransactions.length > 0 || projectedTransactionsForDay.length > 0) && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                  {hasActualWeeklyRecurring && (
-                    <Typography variant="caption" sx={{ color: 'secondary.main', fontWeight: 'bold' }}>
-                      🔄 Weekly
-                    </Typography>
-                  )}
-                  {hasActualMonthlyRecurring && (
-                    <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 'bold' }}>
-                      🔄 Monthly
-                    </Typography>
-                  )}
-                  {hasProjectedRecurring && (
-                    <Typography variant="caption" sx={{ color: 'primary.main', fontStyle: 'italic' }}>
-                      📅 Upcoming
-                    </Typography>
-                  )}
-                  {hasOneTime && !showMultiUser && (
-                    <Typography variant="caption" color="text.secondary">
-                      {actualTransactions.filter(t => !t.repeatMonthly && !t.repeatWeekly).length} one-time
-                    </Typography>
-                  )}
+              {/* Phone: one dot per person, filled when paid in, hollow when scheduled */}
+              {userEntries.length > 0 && (
+                <Box sx={{ display: { xs: 'flex', sm: 'none' }, flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    {userEntries.map(([userId, totals]) => (
+                      <Box key={userId} sx={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        border: '1.5px solid',
+                        borderColor: userColorMap.get(userId) || 'text.secondary',
+                        bgcolor: totals.actual > 0 ? (userColorMap.get(userId) || 'text.secondary') : 'transparent'
+                      }} />
+                    ))}
+                  </Box>
+                  <Typography sx={{ fontSize: '0.625rem', fontWeight: 600, color: actualTotal > 0 ? 'text.primary' : 'text.secondary', lineHeight: 1.2 }}>
+                    {compact(actualTotal + projectedTotal)}
+                  </Typography>
                 </Box>
               )}
-            </Box>
+
+              {/* Larger screens: an amount chip per person */}
+              <Box sx={{ display: { xs: 'none', sm: 'flex' }, flexDirection: 'column', gap: 0.5 }}>
+                {(showMultiUser ? userEntries : userEntries.length ? [['all', { actual: actualTotal, projected: projectedTotal }] as const] : []).map(([userId, totals]) => (
+                  <Box key={userId} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {totals.actual > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 0.75, py: 0.25, borderRadius: 1.5, bgcolor: 'action.hover', fontSize: '0.75rem', fontWeight: 600 }}>
+                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, bgcolor: userId === 'all' ? 'primary.main' : userColorMap.get(userId) }} />
+                        {compact(totals.actual)}
+                      </Box>
+                    )}
+                    {totals.projected > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 0.75, py: 0.25, borderRadius: 1.5, border: '1.5px dashed', borderColor: 'divider', color: 'text.secondary', fontSize: '0.75rem', fontWeight: 600 }}>
+                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, bgcolor: userId === 'all' ? 'primary.main' : userColorMap.get(userId) }} />
+                        {compact(totals.projected)}
+                      </Box>
+                    )}
+                  </Box>
+                ))}
+                {(hasActualMonthlyRecurring || hasActualWeeklyRecurring) && (
+                  <Typography sx={{ fontSize: '0.6875rem', color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                    <Repeat sx={{ fontSize: 12 }} />
+                    {hasActualWeeklyRecurring && hasActualMonthlyRecurring ? 'Repeats' : hasActualWeeklyRecurring ? 'Weekly' : 'Monthly'}
+                  </Typography>
+                )}
+                {hasOneTime && !showMultiUser && !hasProjectedRecurring && !(hasActualMonthlyRecurring || hasActualWeeklyRecurring) && (
+                  <Typography sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}>One-off</Typography>
+                )}
+              </Box>
+            </ButtonBase>
           );
           })}
         </Box>
       </CardContent>
 
       {/* Main Dialog - View/Add Transactions */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           {dialogMode === 'view' ? (
             selectedDate ? format(selectedDate, 'EEEE, MMMM do, yyyy') : ''
@@ -640,12 +579,12 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                       <List dense>
                         {actualTransactionsForDialog.map((transaction) => {
                           const isOwnTransaction = transaction.userId === currentUser.id;
-                          const transactionColor = userColorMap.get(transaction.userId) || 'grey.500';
+                          const transactionColor = userColorMap.get(transaction.userId) || 'text.secondary';
                           return (
                             <ListItem
                               key={transaction.id}
                               sx={{
-                                bgcolor: 'grey.50',
+                                bgcolor: 'action.hover',
                                 borderRadius: 1,
                                 mb: 1,
                                 borderLeft: selectedUserIds.size > 1 ? `4px solid ${transactionColor}` : 'none',
@@ -730,12 +669,12 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                       </Typography>
                       <List dense>
                         {projectedTransactionsForDialog.map((transaction) => {
-                          const transactionColor = userColorMap.get(transaction.userId) || 'grey.500';
+                          const transactionColor = userColorMap.get(transaction.userId) || 'text.secondary';
                           return (
                             <ListItem
                               key={transaction.id}
                               sx={{
-                                bgcolor: 'primary.50',
+                                bgcolor: 'action.hover',
                                 borderRadius: 1,
                                 mb: 1,
                                 opacity: 0.8,

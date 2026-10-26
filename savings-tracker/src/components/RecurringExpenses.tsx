@@ -35,6 +35,7 @@ import {
   fetchExpenseCategories
 } from '../api';
 import { useAuth } from '../AuthContext';
+import { seriesColors } from '../theme';
 
 interface RecurringExpensesProps {
   currentUser: User;
@@ -139,7 +140,7 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
   };
 
   const getUserColor = (userId: string): string => {
-    const colors = ['#667eea', '#e91e63', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+    const colors = seriesColors;
     const index = allUsers.findIndex(u => u.id === userId);
     return colors[index >= 0 ? index % colors.length : 0];
   };
@@ -182,10 +183,9 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h3">
-            🔄 Recurring Expenses
+            Recurring expenses
           </Typography>
           <Button
-            variant="outlined"
             size="small"
             startIcon={<Add />}
             onClick={() => handleOpenDialog()}
@@ -229,15 +229,15 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
                     mb: 1,
                     pb: 0.5,
                     borderBottom: '1px solid',
-                    borderColor: 'grey.200'
+                    borderColor: 'divider'
                   }}>
                     {category ? (
                       <>
                         <Box
                           sx={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: '50%',
+                            width: 10,
+                            height: 10,
+                            borderRadius: '3px',
                             bgcolor: category.color
                           }}
                         />
@@ -255,7 +255,7 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
                     </Typography>
                   </Box>
 
-                  <List dense sx={{ pt: 0 }}>
+                  <List disablePadding>
                     {categoryExpenses.map((expense) => {
                       const isOwner = expense.userId === currentUser.id;
                       const userColor = getUserColor(expense.userId);
@@ -264,39 +264,38 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
                         <ListItem
                           key={expense.id}
                           sx={{
-                            bgcolor: 'grey.50',
-                            borderRadius: 1,
-                            mb: 0.5,
-                            pr: isOwner ? 10 : 2
+                            px: 0,
+                            py: 0.75,
+                            pr: isOwner ? 10 : 0
                           }}
                         >
                           <ListItemText
                             primary={
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
                                   {expense.name}
                                 </Typography>
                                 <Chip
                                   icon={<Repeat sx={{ fontSize: '0.8rem !important' }} />}
                                   label={getRecurrenceLabel(expense.recurrenceInterval)}
                                   size="small"
-                                  variant="outlined"
-                                  sx={{ height: 20, fontSize: '0.65rem' }}
+                                  sx={{ height: 20, fontSize: '0.75rem', bgcolor: 'action.hover', color: 'text.secondary' }}
                                 />
                                 <Chip
                                   label={getUserName(expense.userId)}
                                   size="small"
                                   sx={{
                                     height: 20,
-                                    fontSize: '0.65rem',
-                                    bgcolor: `${userColor}20`,
-                                    color: userColor
+                                    fontSize: '0.75rem',
+                                    bgcolor: 'action.hover',
+                                    color: 'text.secondary',
+                                    '&::before': { content: '""', width: 6, height: 6, borderRadius: '50%', bgcolor: userColor, ml: 1 }
                                   }}
                                 />
                               </Box>
                             }
                             secondary={
-                              <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                                 £{expense.amount.toFixed(2)}
                                 <Typography component="span" variant="caption" color="text.secondary">
                                   {expense.recurrenceInterval === 'weekly' && '/week'}
@@ -311,14 +310,16 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
                               <IconButton
                                 size="small"
                                 onClick={() => handleOpenDialog(expense)}
-                                sx={{ mr: 0.5 }}
+                                sx={{ mr: 0.5, color: 'text.secondary' }}
+                                aria-label={`Edit ${expense.name}`}
                               >
                                 <Edit fontSize="small" />
                               </IconButton>
                               <IconButton
                                 size="small"
                                 onClick={() => handleDelete(expense)}
-                                color="error"
+                                sx={{ color: 'text.secondary' }}
+                                aria-label={`Delete ${expense.name}`}
                               >
                                 <Delete fontSize="small" />
                               </IconButton>
@@ -336,9 +337,9 @@ const RecurringExpenses: React.FC<RecurringExpensesProps> = ({ currentUser }) =>
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Estimated monthly total:
+                Estimated monthly total
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 ~£{monthlyTotal.toFixed(0)}/mo
               </Typography>
             </Box>

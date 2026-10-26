@@ -31,6 +31,7 @@ import {
   deleteExpenseCategory
 } from '../api';
 import { useAuth } from '../AuthContext';
+import { seriesColors } from '../theme';
 
 interface ExpenseCategoriesProps {
   currentUser: User;
@@ -149,7 +150,7 @@ const ExpenseCategories: React.FC<ExpenseCategoriesProps> = ({ currentUser }) =>
 
   // Get user color based on their position in allUsers
   const getUserColor = (userId: string): string => {
-    const colors = ['#667eea', '#e91e63', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+    const colors = seriesColors;
     const index = allUsers.findIndex(u => u.id === userId);
     return colors[index >= 0 ? index % colors.length : 0];
   };
@@ -159,15 +160,14 @@ const ExpenseCategories: React.FC<ExpenseCategoriesProps> = ({ currentUser }) =>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h3">
-            🏷️ Expense Categories
+            Categories
           </Typography>
           <Button
-            variant="outlined"
             size="small"
             startIcon={<Add />}
             onClick={() => handleOpenDialog()}
           >
-            Add Category
+            Add
           </Button>
         </Box>
 
@@ -189,7 +189,7 @@ const ExpenseCategories: React.FC<ExpenseCategoriesProps> = ({ currentUser }) =>
                 <ListItem
                   key={category.id}
                   sx={{
-                    bgcolor: 'grey.50',
+                    bgcolor: 'action.hover',
                     borderRadius: 1,
                     mb: 0.5,
                     pr: isOwner ? 12 : 2
@@ -216,9 +216,10 @@ const ExpenseCategories: React.FC<ExpenseCategoriesProps> = ({ currentUser }) =>
                           size="small"
                           sx={{
                             height: 20,
-                            fontSize: '0.65rem',
-                            bgcolor: `${userColor}20`,
-                            color: userColor
+                            fontSize: '0.75rem',
+                            bgcolor: 'action.hover',
+                            color: 'text.secondary',
+                            '&::before': { content: '""', width: 6, height: 6, borderRadius: '50%', bgcolor: userColor, ml: 1 }
                           }}
                         />
                       </Box>
@@ -236,7 +237,8 @@ const ExpenseCategories: React.FC<ExpenseCategoriesProps> = ({ currentUser }) =>
                       <IconButton
                         size="small"
                         onClick={() => handleDeleteClick(category)}
-                        color="error"
+                        sx={{ color: 'text.secondary' }}
+                        aria-label={`Delete ${category.name}`}
                       >
                         <Delete fontSize="small" />
                       </IconButton>

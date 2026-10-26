@@ -25,12 +25,12 @@ import {
   MenuItem,
   useMediaQuery,
   useTheme,
+  LinearProgress,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SavingsIcon from '@mui/icons-material/Savings';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import SubdirectoryArrowRightIcon from '@mui/icons-material/SubdirectoryArrowRight';
@@ -44,6 +44,7 @@ import {
   BudgetWithStreams,
 } from '../api';
 import { BudgetStream } from '../types';
+import { seriesColors, cssVars } from '../theme';
 
 // Savings breakdown by pot
 export interface SavingsBreakdown {
@@ -63,25 +64,14 @@ interface BudgetSankeyProps {
   onDataChange?: () => void;
 }
 
-// Softer pastel color palette
-const STREAM_COLORS = [
-  '#8b5cf6', // Purple
-  '#ec4899', // Pink
-  '#f59e0b', // Amber
-  '#10b981', // Emerald
-  '#3b82f6', // Blue
-  '#ef4444', // Red
-  '#06b6d4', // Cyan
-  '#84cc16', // Lime
-  '#f97316', // Orange
-  '#6366f1', // Indigo
-];
+// Stream colours offered when adding a category
+const STREAM_COLORS = [...seriesColors, '#556070', '#8A6D3B'];
 
 // Fixed colors for specific node types
 const NODE_COLORS: Record<string, string> = {
-  'net-salary': '#6366f1',    // Indigo
-  'savings': '#10b981',        // Emerald
-  'unallocated': '#94a3b8',    // Slate
+  'net-salary': '#556070',     // Slate
+  'savings': '#0B7A63',        // Teal, matches the app accent
+  'unallocated': '#8A93A3',    // Grey
 };
 
 const BudgetSankey: React.FC<BudgetSankeyProps> = ({
@@ -356,8 +346,8 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
         const remainder = stream.amount - childrenTotal;
         if (remainder > 0.01) {
           const otherNodeId = `${nodeId}-other`;
-          nodes.push({ id: otherNodeId, nodeColor: '#94a3b8' });
-          colorMap[otherNodeId] = '#94a3b8';
+          nodes.push({ id: otherNodeId, nodeColor: NODE_COLORS.unallocated });
+          colorMap[otherNodeId] = NODE_COLORS.unallocated;
           links.push({
             source: nodeId,
             target: otherNodeId,
@@ -480,58 +470,82 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
         </Alert>
       )}
       
-      {/* Net Salary Input */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <AccountBalanceIcon sx={{ color: 'primary.main', fontSize: 32 }} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Monthly Net Salary
+      {/* Take-home pay and how much of it is planned */}
+      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
+        <CardContent sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 5, rowGap: 2 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', fontWeight: 500 }}>
+              Monthly take-home pay
+            </Typography>
+            {editingSalary ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  type="number"
+                  value={netSalary}
+                  onChange={(e) => setNetSalary(e.target.value)}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">£</InputAdornment>,
+                  }}
+                  inputProps={{ inputMode: 'decimal', 'aria-label': 'Monthly take-home pay' }}
+                  sx={{ width: 160 }}
+                  autoFocus
+                />
+                <Button variant="contained" size="small" onClick={handleSaveSalary} disabled={saving}>
+                  Save
+                </Button>
+                <Button
+                  size="small"
+                  sx={{ color: 'text.secondary' }}
+                  onClick={() => {
+                    setNetSalary(budget?.netSalary.toString() || '');
+                    setEditingSalary(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography sx={{ fontSize: { xs: '1.75rem', sm: '2rem' }, fontWeight: 700 }}>
+                  £{netSalaryValue.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </Typography>
+                <IconButton onClick={() => setEditingSalary(true)} aria-label="Edit take-home pay" sx={{ color: 'text.secondary' }}>
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', gap: { xs: 3, sm: 5 } }}>
+            <Box>
+              <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', fontWeight: 500 }}>Planned</Typography>
+              <Typography sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 700 }}>
+                £{totalAllocated.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
               </Typography>
-              {editingSalary ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <TextField
-                    size="small"
-                    type="number"
-                    value={netSalary}
-                    onChange={(e) => setNetSalary(e.target.value)}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">£</InputAdornment>,
-                    }}
-                    sx={{ width: 200 }}
-                    autoFocus
-                  />
-                  <Button 
-                    variant="contained" 
-                    size="small" 
-                    onClick={handleSaveSalary}
-                    disabled={saving}
-                  >
-                    Save
-                  </Button>
-                  <Button 
-                    size="small" 
-                    onClick={() => {
-                      setNetSalary(budget?.netSalary.toString() || '');
-                      setEditingSalary(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </Box>
-              ) : (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                    £{netSalaryValue.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-                  </Typography>
-                  <IconButton size="small" onClick={() => setEditingSalary(true)}>
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-              )}
+            </Box>
+            <Box>
+              <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', fontWeight: 500 }}>
+                {unallocated < 0 ? 'Over by' : 'Left to plan'}
+              </Typography>
+              <Typography sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' }, fontWeight: 700, color: unallocated < 0 ? 'error.main' : 'primary.main' }}>
+                £{Math.abs(unallocated).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+              </Typography>
             </Box>
           </Box>
+          {netSalaryValue > 0 && (
+            <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, (totalAllocated / netSalaryValue) * 100)}
+                color={unallocated < 0 ? 'error' : 'primary'}
+                sx={{ height: 10, borderRadius: 5 }}
+                aria-label="Share of pay planned"
+              />
+              <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.75 }}>
+                {Math.round((totalAllocated / netSalaryValue) * 100)}% of your pay has a plan
+              </Typography>
+            </Box>
+          )}
         </CardContent>
       </Card>
 
@@ -539,8 +553,8 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       {sankeyData && sankeyData.links.length > 0 ? (
         <Card sx={{ mb: 3 }}>
           <CardContent sx={{ px: isMobile ? 1 : 2 }}>
-            <Typography variant="h6" sx={{ mb: 2, fontSize: isMobile ? '1rem' : '1.25rem' }}>
-              Salary Allocation Flow
+            <Typography variant="h6" component="h2" sx={{ mb: 1, fontSize: isMobile ? '1.0625rem' : '1.25rem' }}>
+              Where the money goes
             </Typography>
             <Box 
               sx={{ 
@@ -555,51 +569,55 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                 data={sankeyData}
                 margin={sankeyMargin}
                 align="justify"
-                colors={(node) => sankeyData.colorMap[node.id] || '#888'}
+                colors={(node) => sankeyData.colorMap[node.id] || NODE_COLORS.unallocated}
                 nodeOpacity={1}
                 nodeHoverOthersOpacity={0.35}
                 nodeThickness={sankeyNodeThickness}
                 nodeSpacing={sankeyNodeSpacing}
                 nodeBorderWidth={0}
                 nodeBorderRadius={3}
-                linkOpacity={0.4}
+                linkOpacity={0.3}
+                linkBlendMode="normal"
                 linkHoverOthersOpacity={0.1}
                 linkContract={isMobile ? 2 : 3}
-                enableLinkGradient={true}
+                enableLinkGradient={false}
                 labelPosition="outside"
                 labelOrientation="horizontal"
                 labelPadding={sankeyLabelPadding}
-                labelTextColor={{ from: 'color', modifiers: [['darker', 1]] }}
+                labelTextColor={cssVars.textPrimary}
+                theme={{ text: { fontFamily: "'Figtree Variable', system-ui, sans-serif", fill: cssVars.textPrimary } }}
                 sort={getNodeSort()}
-                label={(node) => getNodeLabel(node.id, true)}
+                label={(node) => (node.id === 'Net Salary' ? '' : getNodeLabel(node.id, true))}
                 nodeTooltip={({ node }) => (
                   <Box sx={{ 
-                    bgcolor: 'white', 
+                    bgcolor: 'background.paper', 
                     p: 1.5, 
-                    borderRadius: 1, 
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    border: '1px solid #e5e7eb'
+                    borderRadius: 2.5,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    border: 1,
+                    borderColor: 'divider'
                   }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {getNodeLabel(node.id)}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: node.color, fontWeight: 600, mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mt: 0.5 }}>
                       £{node.value.toLocaleString()}
                     </Typography>
                   </Box>
                 )}
                 linkTooltip={({ link }) => (
                   <Box sx={{ 
-                    bgcolor: 'white', 
+                    bgcolor: 'background.paper', 
                     p: 1.5, 
-                    borderRadius: 1, 
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    border: '1px solid #e5e7eb'
+                    borderRadius: 2.5,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                    border: 1,
+                    borderColor: 'divider'
                   }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#374151' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {getNodeLabel(link.source.id)} → {getNodeLabel(link.target.id)}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: link.target.color, fontWeight: 600, mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600, mt: 0.5 }}>
                       £{link.value.toLocaleString()}
                     </Typography>
                   </Box>
@@ -620,45 +638,6 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
           </CardContent>
         </Card>
       )}
-
-      {/* Budget Summary */}
-      <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, 
-        gap: 2, 
-        mb: 3 
-      }}>
-        <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="subtitle2" color="text.secondary">Total Allocated</Typography>
-            <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main' }}>
-              £{totalAllocated.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="subtitle2" color="text.secondary">Unallocated</Typography>
-            <Typography 
-              variant="h5" 
-              sx={{ 
-                fontWeight: 600, 
-                color: unallocated < 0 ? 'error.main' : unallocated === 0 ? 'success.main' : 'warning.main' 
-              }}
-            >
-              £{unallocated.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography variant="subtitle2" color="text.secondary">% Allocated</Typography>
-            <Typography variant="h5" sx={{ fontWeight: 600 }}>
-              {netSalaryValue > 0 ? Math.round((totalAllocated / netSalaryValue) * 100) : 0}%
-            </Typography>
-          </CardContent>
-        </Card>
-      </Box>
 
       {/* Savings Breakdown Card */}
       {savingsBreakdown.length > 0 && (
@@ -695,11 +674,11 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                   <ListItem
                     key={saving.potId}
                     sx={{
-                      bgcolor: 'grey.50',
+                      bgcolor: 'action.hover',
                       borderRadius: 1,
                       mb: 1,
                       border: '1px solid',
-                      borderColor: 'grey.200',
+                      borderColor: 'divider',
                     }}
                   >
                     <Box
@@ -743,14 +722,14 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Budget Allocations</Typography>
+            <Typography variant="h6" component="h2">Categories</Typography>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => handleOpenStreamDialog()}
               size="small"
             >
-              Add Stream
+              Add
             </Button>
           </Box>
           
@@ -765,19 +744,20 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                   <React.Fragment key={stream.id}>
                     <ListItem
                       sx={{
-                        bgcolor: depth === 0 ? 'grey.50' : 'grey.100',
-                        borderRadius: 1,
-                        mb: 0.5,
-                        ml: depth * 3,
+                        borderRadius: 2,
+                        mb: 0.75,
+                        ml: { xs: depth * 2, sm: depth * 3 },
+                        width: { xs: `calc(100% - ${depth * 16}px)`, sm: `calc(100% - ${depth * 24}px)` },
                         border: '1px solid',
-                        borderColor: depth === 0 ? 'grey.200' : 'grey.300',
+                        borderColor: 'divider',
+                        pr: 17,
                         py: 1,
                       }}
                     >
                       {depth > 0 && (
                         <SubdirectoryArrowRightIcon 
                           sx={{ 
-                            color: 'grey.400', 
+                            color: 'text.disabled', 
                             mr: 1, 
                             fontSize: 18,
                           }} 
@@ -816,6 +796,7 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                           onClick={() => handleOpenStreamDialog(undefined, stream.id)}
                           sx={{ mr: 0.5 }}
                           title="Add child stream"
+                          aria-label="Add child stream"
                         >
                           <AddIcon fontSize="small" />
                         </IconButton>
@@ -824,14 +805,16 @@ const BudgetSankey: React.FC<BudgetSankeyProps> = ({
                           onClick={() => handleOpenStreamDialog(stream)}
                           sx={{ mr: 0.5 }}
                           title="Edit stream"
+                          aria-label="Edit stream"
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
                         <IconButton
                           size="small"
                           onClick={() => handleDeleteStream(stream.id)}
-                          color="error"
+                          sx={{ color: 'text.secondary' }}
                           title="Delete stream"
+                          aria-label="Delete stream"
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
