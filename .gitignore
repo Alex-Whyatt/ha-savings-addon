@@ -10,6 +10,9 @@ dist/
 # Database
 savings-tracker/backend/savings.db
 
+# Packaged add-on archive
+ha-addon.zip
+
 # Misc
 .DS_Store
 *.local
