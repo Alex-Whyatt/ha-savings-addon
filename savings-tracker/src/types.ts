@@ -125,7 +125,22 @@ export interface Holding {
   name: string;
   identifier?: string | null; // ISIN or ticker
   allocation?: number | null; // % of the account
-  expectedReturn?: number | null; // Expected % a year
+  expectedReturn?: number | null; // Expected % a year; blank uses the fund's average
+  units?: number | null; // Units held, for valuing from prices
+  price?: FundPrice | null; // Looked up from the ISIN or ticker
+}
+
+// Latest looked-up price for a fund
+export interface FundPrice {
+  symbol: string | null;
+  price: number | null; // In pounds
+  priceAt: string | null;
+  change1m: number | null; // %
+  change1y: number | null; // %
+  averageReturn: number | null; // % a year over the history we have (up to 5 years)
+  historyYears: number | null;
+  error: string | null; // Why the last lookup failed
+  fetchedAt: string | null;
 }
 
 // Funds and growth for one account

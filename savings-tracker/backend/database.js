@@ -129,6 +129,8 @@ function initializeDatabase() {
       identifier TEXT,
       allocation REAL,
       expected_return REAL,
+      units REAL,
+      last_price_used REAL,
       sort_order INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -146,7 +148,25 @@ function initializeDatabase() {
       previous_value REAL NOT NULL,
       date TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      source TEXT DEFAULT 'manual',
       FOREIGN KEY (pot_id) REFERENCES savings_pots (id) ON DELETE CASCADE
+    )
+  `);
+
+  // Latest looked-up price and returns for each fund, by ISIN or ticker
+  db.run(`
+    CREATE TABLE IF NOT EXISTS fund_prices (
+      identifier TEXT PRIMARY KEY,
+      symbol TEXT,
+      currency TEXT,
+      price REAL,
+      price_at TEXT,
+      change_1m REAL,
+      change_1y REAL,
+      average_return REAL,
+      history_years REAL,
+      error TEXT,
+      fetched_at TEXT
     )
   `);
 
@@ -177,6 +197,21 @@ function initializeDatabase() {
 
 // Run migrations for existing databases
 function runMigrations() {
+  // Columns added to the investment tables after 1.6.0
+  [
+    ['pot_holdings', 'units REAL'],
+    ['pot_holdings', 'last_price_used REAL'],
+    ['pot_valuations', "source TEXT DEFAULT 'manual'"]
+  ].forEach(([table, column]) => {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${column}`, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('Migration error:', err.message);
+      } else if (!err) {
+        console.log(`Migration: Added ${column.split(' ')[0]} column to ${table}`);
+      }
+    });
+  });
+
   // Add repeat_weekly column if it doesn't exist
   db.run(`ALTER TABLE transactions ADD COLUMN repeat_weekly INTEGER DEFAULT 0`, (err) => {
     if (err && !err.message.includes('duplicate column')) {
