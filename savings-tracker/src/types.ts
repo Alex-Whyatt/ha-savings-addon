@@ -118,3 +118,25 @@ export type CreateBudgetStream = Pick<
   BudgetStream,
   "name" | "amount" | "color" | "isAutoSavings" | "sortOrder"
 > & { parentId?: string | null };
+
+// A fund held inside an investment account (e.g. a S&S ISA)
+export interface Holding {
+  id?: string;
+  name: string;
+  identifier?: string | null; // ISIN or ticker
+  allocation?: number | null; // % of the account
+  expectedReturn?: number | null; // Expected % a year
+}
+
+// Funds and growth for one account
+export interface InvestmentSummary {
+  potId: string;
+  holdings: Holding[];
+  expectedReturn: number | null; // Blended from the funds
+  growth: number; // Change in value from recorded values
+  paidIn: number;
+  returnPercent: number | null;
+  valuationCount: number;
+  firstValuedAt: string | null;
+  lastValuedAt: string | null;
+}

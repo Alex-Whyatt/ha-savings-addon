@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { runQuery, getRow, getAllRows } = require('./database');
 const { processRecurringTransactions, runProcessingCycle } = require('./scheduler');
 const { testNotification, getNotificationConfig } = require('./notifications');
+const { blendedReturn, valuationSummary } = require('./investments');
 
 const router = express.Router();
 
@@ -359,6 +360,8 @@ router.delete('/pots/:id', requireAuth, async (req, res) => {
 
     // Delete transactions first (due to foreign key constraint)
     await runQuery('DELETE FROM transactions WHERE pot_id = ?', [id]);
+    await runQuery('DELETE FROM pot_holdings WHERE pot_id = ?', [id]);
+    await runQuery('DELETE FROM pot_valuations WHERE pot_id = ?', [id]);
 
     // Delete the pot
     await runQuery('DELETE FROM savings_pots WHERE id = ?', [id]);
@@ -1185,6 +1188,120 @@ router.get('/scheduler/history', requireAuth, async (req, res) => {
     })));
   } catch (error) {
     console.error('Error getting processing history:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Investment Routes (funds held and recorded values)
+
+const formatHolding = (h) => ({
+  id: h.id,
+  potId: h.pot_id,
+  name: h.name,
+  identifier: h.identifier,
+  allocation: h.allocation,
+  expectedReturn: h.expected_return
+});
+
+// Funds and growth for every account in the household
+router.get('/investments', requireAuth, async (req, res) => {
+  try {
+    const [pots, holdings, valuations] = await Promise.all([
+      getAllRows('SELECT * FROM savings_pots'),
+      getAllRows('SELECT * FROM pot_holdings ORDER BY sort_order ASC, created_at ASC'),
+      getAllRows('SELECT * FROM pot_valuations ORDER BY date ASC')
+    ]);
+
+    res.json(pots.map(pot => ({
+      potId: pot.id,
+      holdings: holdings.filter(h => h.pot_id === pot.id).map(formatHolding),
+      expectedReturn: blendedReturn(holdings.filter(h => h.pot_id === pot.id)),
+      ...valuationSummary(pot, valuations.filter(v => v.pot_id === pot.id))
+    })));
+  } catch (error) {
+    console.error('Error fetching investments:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Replace the funds held in an account, and use their blended return for projections
+router.put('/pots/:id/holdings', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { holdings } = req.body;
+    const userId = req.user.id;
+
+    if (!Array.isArray(holdings)) {
+      return res.status(400).json({ error: 'Holdings must be a list' });
+    }
+
+    const pot = await getRow('SELECT * FROM savings_pots WHERE id = ? AND user_id = ?', [id, userId]);
+    if (!pot) {
+      return res.status(404).json({ error: 'Pot not found' });
+    }
+
+    const toNumber = (value) => (typeof value === 'number' && isFinite(value) ? value : null);
+    const cleaned = holdings
+      .filter(h => h && typeof h.name === 'string' && h.name.trim())
+      .map((h, index) => ({
+        id: uuidv4(),
+        pot_id: id,
+        name: h.name.trim(),
+        identifier: typeof h.identifier === 'string' && h.identifier.trim() ? h.identifier.trim().toUpperCase() : null,
+        allocation: toNumber(h.allocation),
+        expected_return: toNumber(h.expectedReturn),
+        sort_order: index
+      }));
+
+    const now = new Date().toISOString();
+    await runQuery('DELETE FROM pot_holdings WHERE pot_id = ?', [id]);
+    for (const h of cleaned) {
+      await runQuery(
+        'INSERT INTO pot_holdings (id, pot_id, name, identifier, allocation, expected_return, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [h.id, h.pot_id, h.name, h.identifier, h.allocation, h.expected_return, h.sort_order, now, now]
+      );
+    }
+
+    // Projections use the account's rate, so keep it in step with the funds
+    const expectedReturn = blendedReturn(cleaned);
+    if (expectedReturn !== null) {
+      await runQuery('UPDATE savings_pots SET interest_rate = ?, updated_at = ? WHERE id = ?', [expectedReturn, now, id]);
+    }
+
+    res.json({ potId: id, holdings: cleaned.map(formatHolding), expectedReturn });
+  } catch (error) {
+    console.error('Error saving holdings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Record what an account is worth now; the change is counted as growth
+router.post('/pots/:id/valuations', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { value } = req.body;
+    const userId = req.user.id;
+
+    if (typeof value !== 'number' || !isFinite(value) || value < 0) {
+      return res.status(400).json({ error: 'Value must be a positive number' });
+    }
+
+    const pot = await getRow('SELECT * FROM savings_pots WHERE id = ? AND user_id = ?', [id, userId]);
+    if (!pot) {
+      return res.status(404).json({ error: 'Pot not found' });
+    }
+
+    const now = new Date().toISOString();
+    await runQuery(
+      'INSERT INTO pot_valuations (id, pot_id, user_id, value, previous_value, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [uuidv4(), id, userId, value, pot.current_total, now, now]
+    );
+    await runQuery('UPDATE savings_pots SET current_total = ?, updated_at = ? WHERE id = ?', [value, now, id]);
+
+    const valuations = await getAllRows('SELECT * FROM pot_valuations WHERE pot_id = ?', [id]);
+    res.status(201).json({ potId: id, ...valuationSummary({ ...pot, current_total: value }, valuations) });
+  } catch (error) {
+    console.error('Error recording valuation:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

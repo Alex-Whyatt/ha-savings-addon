@@ -187,6 +187,11 @@ Your main overview showing:
 - Customise colours for easy identification
 - View totals and goal completion percentages
 
+### Investments (S&S ISA, Moneybox and similar)
+- **Update value**: tap an account's balance (or ⋮ → Update value) and type in what it's worth today. The change is recorded as growth, not money paid in, so the card shows e.g. "£10,500 paid in · +£740 (+7.0%) since Oct 2026".
+- **Funds held**: ⋮ → Add funds held lets you list each fund with its ISIN or ticker, its share of the account and the return you expect. Projections then use the blended rate, so you no longer have to keep adjusting the account's growth rate by hand.
+- Your partner can see your funds and growth but can't change them.
+
 ## 📡 API Endpoints
 
 The add-on provides a REST API for advanced integrations:

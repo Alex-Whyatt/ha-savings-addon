@@ -1,5 +1,6 @@
-import React from 'react';
-import { SavingsData, SavingsProjection, User } from '../types';
+import React, { useCallback, useEffect, useState } from 'react';
+import { InvestmentSummary, SavingsData, SavingsProjection, User } from '../types';
+import { fetchInvestments } from '../api';
 import SavingsPotCard from './SavingsPotCard';
 import ProjectionChart from './ProjectionChart';
 import UpcomingSpends from './UpcomingSpends';
@@ -66,6 +67,17 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
   const { otherUsers } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [investments, setInvestments] = useState<InvestmentSummary[]>([]);
+
+  const refreshInvestments = useCallback(async () => {
+    setInvestments(await fetchInvestments());
+  }, []);
+
+  // Reload funds and growth whenever the accounts change
+  useEffect(() => {
+    refreshInvestments();
+  }, [data.pots, refreshInvestments]);
+
   const totalSavings = data.pots.reduce((sum, pot) => sum + pot.currentTotal, 0);
 
   // Calculate total recurring contributions for this month (both users)
@@ -188,6 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, projections, onDataChange, 
             pot={pot}
             onUpdate={onDataChange}
             currentUser={currentUser}
+            investment={investments.find(i => i.potId === pot.id)}
           />
         ))}
       </Box>

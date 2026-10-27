@@ -1,17 +1,22 @@
 import React, { useState } from 'react';
-import { SavingsPot, User } from '../types';
-import { updateSavingsPot } from '../storage';
-import { Card, CardContent, Typography, Box, TextField, Button, ButtonBase, LinearProgress, Chip } from '@mui/material';
+import { InvestmentSummary, SavingsPot, User } from '../types';
+import { recordValuation } from '../api';
+import { Card, CardContent, Typography, Box, TextField, Button, ButtonBase, LinearProgress, Chip, IconButton, Menu, MenuItem } from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import { format } from 'date-fns';
 import { useAuth } from '../AuthContext';
+import FundsDialog from './FundsDialog';
 
 interface SavingsPotCardProps {
   pot: SavingsPot;
   onUpdate: () => void;
   currentUser?: User;
+  investment?: InvestmentSummary;
 }
 
-const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentUser }) => {
+const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentUser, investment }) => {
   const { allUsers } = useAuth();
   // Safety check - don't render if pot is invalid
   if (!pot || typeof pot.currentTotal !== 'number') {
@@ -22,14 +27,29 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
   const isCurrentUser = currentUser && pot.userId === currentUser.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editAmount, setEditAmount] = useState(pot.currentTotal.toString());
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [fundsOpen, setFundsOpen] = useState(false);
 
-  const handleSaveAmount = () => {
+  const holdings = investment?.holdings ?? [];
+  const hasValuations = !!investment && investment.valuationCount > 0;
+
+  // Typing in a new balance records what the account is worth today,
+  // so the change counts as growth rather than money paid in
+  const handleSaveAmount = async () => {
     const newAmount = parseFloat(editAmount);
     if (!isNaN(newAmount) && newAmount >= 0) {
-      updateSavingsPot(pot.id, { currentTotal: newAmount });
+      if (newAmount !== pot.currentTotal) {
+        await recordValuation(pot.id, newAmount);
+      }
       setIsEditing(false);
       onUpdate();
     }
+  };
+
+  const startEditing = () => {
+    setMenuAnchor(null);
+    setEditAmount(pot.currentTotal.toString());
+    setIsEditing(true);
   };
 
   const handleCancelEdit = () => {
@@ -41,8 +61,8 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
     ? Math.min((pot.currentTotal / pot.targetAmount) * 100, 100)
     : 0;
 
-  const formatGBP = (value: number) =>
-    `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatGBP = (value: number, decimals = 2) =>
+    `£${value.toLocaleString('en-GB', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 
   return (
     <Card sx={{ height: '100%', boxSizing: 'border-box' }}>
@@ -58,6 +78,24 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
               size="small"
               sx={{ fontSize: '0.75rem', height: 22, bgcolor: 'action.hover', color: 'text.secondary' }}
             />
+          )}
+          {isCurrentUser && (
+            <>
+              <IconButton
+                size="small"
+                aria-label={`More for ${pot.name}`}
+                onClick={(e) => setMenuAnchor(e.currentTarget)}
+                sx={{ color: 'text.secondary', mr: -1, my: -0.5 }}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+              <Menu anchorEl={menuAnchor} open={!!menuAnchor} onClose={() => setMenuAnchor(null)}>
+                <MenuItem onClick={startEditing}>Update value</MenuItem>
+                <MenuItem onClick={() => { setMenuAnchor(null); setFundsOpen(true); }}>
+                  {holdings.length > 0 ? 'Edit funds' : 'Add funds held'}
+                </MenuItem>
+              </Menu>
+            </>
           )}
         </Box>
 
@@ -79,7 +117,7 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
                 step: "0.01",
                 min: "0",
                 inputMode: 'decimal',
-                'aria-label': `New balance for ${pot.name}`
+                'aria-label': `Value of ${pot.name} today`
               }}
               InputProps={{ startAdornment: <Typography sx={{ mr: 0.5, color: 'text.secondary' }}>£</Typography> }}
               sx={{ flex: '1 1 140px' }}
@@ -94,9 +132,9 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
         ) : (
           <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
             <ButtonBase
-              onClick={() => isCurrentUser && setIsEditing(true)}
+              onClick={() => isCurrentUser && startEditing()}
               disabled={!isCurrentUser}
-              aria-label={isCurrentUser ? `Edit balance of ${pot.name}` : undefined}
+              aria-label={isCurrentUser ? `Update value of ${pot.name}` : undefined}
               sx={{
                 borderRadius: 1,
                 mx: -0.75,
@@ -116,6 +154,29 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
               </Typography>
             )}
           </Box>
+        )}
+
+        {hasValuations && investment && (
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', mt: -0.5 }}>
+            {formatGBP(investment.paidIn, 0)} paid in ·{' '}
+            <Box component="span" sx={{ fontWeight: 600, color: investment.growth >= 0 ? 'success.main' : 'error.main' }}>
+              {investment.growth >= 0 ? '+' : '−'}{formatGBP(Math.abs(investment.growth), 0)}
+              {investment.returnPercent != null && ` (${investment.returnPercent >= 0 ? '+' : '−'}${Math.abs(investment.returnPercent).toFixed(1)}%)`}
+            </Box>
+            {investment.firstValuedAt && ` since ${format(new Date(investment.firstValuedAt), 'MMM yyyy')}`}
+          </Typography>
+        )}
+
+        {holdings.length > 0 && (
+          <ButtonBase
+            onClick={() => setFundsOpen(true)}
+            sx={{ justifyContent: 'space-between', borderRadius: 1, mx: -0.75, px: 0.75, py: 0.25, '&:hover': { bgcolor: 'action.hover' } }}
+          >
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }} noWrap>
+              {holdings.length} fund{holdings.length !== 1 ? 's' : ''}: {holdings.map(h => h.name).join(', ')}
+            </Typography>
+            <ChevronRightIcon sx={{ fontSize: 18, color: 'text.secondary', flexShrink: 0 }} />
+          </ButtonBase>
         )}
 
         <Box sx={{ mt: 'auto' }}>
@@ -142,6 +203,14 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
           )}
         </Box>
       </CardContent>
+      <FundsDialog
+        open={fundsOpen}
+        pot={pot}
+        holdings={holdings}
+        canEdit={!!isCurrentUser}
+        onClose={() => setFundsOpen(false)}
+        onSaved={onUpdate}
+      />
     </Card>
   );
 };
