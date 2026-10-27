@@ -67,13 +67,28 @@ function buildSavingsSummary(users, pots, transactions, now = new Date()) {
     };
   });
 
+  // A payment changed from a later date is stored as one that stops on that
+  // date and a replacement starting on it; count the one in effect now
+  const replacedFrom = new Set(
+    transactions
+      .filter(transaction => transaction.repeat_until)
+      .map(transaction => `${transaction.user_id}|${new Date(transaction.repeat_until).getTime()}`)
+  );
+  const inPlanNow = (transaction) => {
+    if (transaction.repeat_until && new Date(transaction.repeat_until) <= now) return false;
+    const start = new Date(transaction.date);
+    return !(start > now && replacedFrom.has(`${transaction.user_id}|${start.getTime()}`));
+  };
+
   for (const transaction of transactions) {
     const person = personFor(transaction.user_id);
     const date = new Date(transaction.date);
     if (isSameMonth(date, now) && date <= now) {
       person.savedThisMonth += transaction.amount;
     }
-    person.monthlyPlan += monthlyAmount(transaction, now);
+    if (inPlanNow(transaction)) {
+      person.monthlyPlan += monthlyAmount(transaction, now);
+    }
   }
 
   const sum = (key) => round2(people.reduce((total, person) => total + person[key], 0));

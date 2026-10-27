@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { normalizeToNoon } from './projections';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { normalizeToNoon, getRepeatDates, calculateProjection } from './projections';
+import { SavingsPot, Transaction } from './types';
 import { getDay, format, addWeeks } from 'date-fns';
 
 describe('normalizeToNoon', () => {
@@ -156,3 +157,73 @@ describe('date-fns addWeeks function', () => {
   });
 });
 
+
+describe('getRepeatDates', () => {
+  const monthly = (date: string, repeatUntil?: string): Transaction => ({
+    id: 'm1',
+    userId: 'alex',
+    potId: 'pot1',
+    amount: 100,
+    date: new Date(date),
+    repeatMonthly: true,
+    repeatUntil: repeatUntil ? new Date(repeatUntil) : null,
+    createdAt: new Date(date),
+  });
+
+  it('leaves out the first occurrence, which is the transaction itself', () => {
+    const dates = getRepeatDates(monthly('2026-01-05T00:00:00'), new Date('2026-01-01T00:00:00'), new Date('2026-03-31T00:00:00'));
+    expect(dates.map(d => format(d.date, 'yyyy-MM-dd'))).toEqual(['2026-02-05', '2026-03-05']);
+    expect(dates.map(d => d.index)).toEqual([1, 2]);
+  });
+
+  it('stops before repeatUntil', () => {
+    const dates = getRepeatDates(
+      monthly('2026-01-05T00:00:00', '2026-04-05T00:00:00'),
+      new Date('2026-01-01T00:00:00'),
+      new Date('2026-12-31T00:00:00')
+    );
+    expect(dates.map(d => format(d.date, 'yyyy-MM-dd'))).toEqual(['2026-02-05', '2026-03-05']);
+  });
+
+  it('keeps repeating long after the start date', () => {
+    const dates = getRepeatDates(monthly('2024-01-05T00:00:00'), new Date('2026-10-01T00:00:00'), new Date('2026-10-31T00:00:00'));
+    expect(dates.map(d => format(d.date, 'yyyy-MM-dd'))).toEqual(['2026-10-05']);
+  });
+
+  it('repeats weekly on the same weekday', () => {
+    const weekly: Transaction = { ...monthly('2026-10-02T00:00:00'), repeatMonthly: false, repeatWeekly: true };
+    const dates = getRepeatDates(weekly, new Date('2026-10-01T00:00:00'), new Date('2026-10-31T00:00:00'));
+    expect(dates.map(d => format(d.date, 'yyyy-MM-dd'))).toEqual(['2026-10-09', '2026-10-16', '2026-10-23', '2026-10-30']);
+  });
+});
+
+describe('calculateProjection with a payment changed from a date onwards', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('uses the old amount before the change and the new amount after it', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-27T12:00:00'));
+
+    const pot: SavingsPot = {
+      id: 'pot1',
+      userId: 'alex',
+      name: 'Holiday',
+      currentTotal: 1000,
+      color: '#000',
+      createdAt: new Date('2026-01-01'),
+      updatedAt: new Date('2026-01-01'),
+    };
+    const base = { userId: 'alex', potId: 'pot1', repeatMonthly: true, createdAt: new Date('2026-01-01') };
+    const transactions: Transaction[] = [
+      // £100 on the 5th, changed to £150 from 5 January
+      { ...base, id: 'old', amount: 100, date: new Date('2026-01-05T12:00:00'), repeatUntil: new Date('2027-01-05T12:00:00') },
+      { ...base, id: 'new', amount: 150, date: new Date('2027-01-05T12:00:00') },
+    ];
+
+    const amounts = calculateProjection(pot, transactions, 4).data.map(d => d.amount);
+    // Oct (now), Nov +100, Dec +100, Jan: the new payment's first occurrence is already in the total, Feb +150
+    expect(amounts).toEqual([1000, 1100, 1200, 1200, 1350]);
+  });
+});

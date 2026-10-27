@@ -64,6 +64,17 @@ describe('buildSavingsSummary', () => {
     expect(summary.people.find(p => p.id === 'beth').monthlyPlan).toBe(100);
   });
 
+  it('counts a payment changed from a later date once', () => {
+    const summary = buildSavingsSummary(users, pots, [
+      // £100 a month, changed to £150 from 5 January
+      tx({ amount: 100, repeat_monthly: 1, date: '2026-09-05T12:00:00.000Z', repeat_until: '2027-01-05T12:00:00.000Z' }),
+      tx({ amount: 150, repeat_monthly: 1, date: '2027-01-05T12:00:00.000Z' }),
+      // Stopped last month
+      tx({ amount: 40, repeat_monthly: 1, date: '2026-06-01T12:00:00.000Z', repeat_until: '2026-09-01T12:00:00.000Z' })
+    ], now);
+    expect(summary.monthlyPlan).toBe(100);
+  });
+
   it('leaves recurring payments that have ended out of the monthly plan', () => {
     const summary = buildSavingsSummary(users, pots, [
       tx({ amount: 500, repeat_monthly: 1, date: '2026-01-28T12:00:00.000Z', repeat_until: '2026-10-01T00:00:00.000Z' }),

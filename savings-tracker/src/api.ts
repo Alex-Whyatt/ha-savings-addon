@@ -4,6 +4,7 @@ import {
   Transaction,
   CreateSavingsPot,
   CreateTransaction,
+  RecurringChange,
   User,
   UpcomingSpend,
   CreateUpcomingSpend,
@@ -170,6 +171,42 @@ export const deleteTransaction = async (id: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error("Error deleting transaction:", error);
+    return false;
+  }
+};
+
+// Change a recurring transaction from one occurrence onwards; earlier
+// occurrences are left as they were
+export const splitRecurringTransaction = async (
+  id: string,
+  fromDate: Date,
+  changes: RecurringChange
+): Promise<boolean> => {
+  try {
+    await apiRequest(`/transactions/${id}/split`, {
+      method: "POST",
+      body: JSON.stringify({ ...changes, fromDate: fromDate.toISOString() }),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error changing recurring transaction:", error);
+    return false;
+  }
+};
+
+// Stop a recurring transaction from one occurrence onwards
+export const stopRecurringTransaction = async (
+  id: string,
+  fromDate: Date
+): Promise<boolean> => {
+  try {
+    await apiRequest(`/transactions/${id}/stop`, {
+      method: "POST",
+      body: JSON.stringify({ fromDate: fromDate.toISOString() }),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error stopping recurring transaction:", error);
     return false;
   }
 };

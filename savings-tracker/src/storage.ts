@@ -4,6 +4,7 @@ import {
   Transaction,
   CreateSavingsPot,
   CreateTransaction,
+  RecurringChange,
 } from "./types";
 import * as api from "./api";
 
@@ -56,6 +57,7 @@ export const loadSavingsData = async (): Promise<SavingsData> => {
       transactions: data.transactions.map((transaction: any) => ({
         ...transaction,
         date: new Date(transaction.date),
+        repeatUntil: transaction.repeatUntil ? new Date(transaction.repeatUntil) : null,
         createdAt: new Date(transaction.createdAt),
       })),
     };
@@ -93,6 +95,7 @@ export const loadSavingsDataForUser = async (
       transactions: data.transactions.map((transaction: any) => ({
         ...transaction,
         date: new Date(transaction.date),
+        repeatUntil: transaction.repeatUntil ? new Date(transaction.repeatUntil) : null,
         createdAt: new Date(transaction.createdAt),
       })),
     };
@@ -285,3 +288,15 @@ export const deleteTransaction = async (id: string): Promise<boolean> => {
 
   return api.deleteTransaction(id);
 };
+
+// Recurring changes from a date onwards are only supported by the API
+export const splitRecurringTransaction = (
+  id: string,
+  fromDate: Date,
+  changes: RecurringChange
+): Promise<boolean> => api.splitRecurringTransaction(id, fromDate, changes);
+
+export const stopRecurringTransaction = (
+  id: string,
+  fromDate: Date
+): Promise<boolean> => api.stopRecurringTransaction(id, fromDate);

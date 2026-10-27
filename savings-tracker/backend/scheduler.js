@@ -11,6 +11,7 @@ const cron = require('node-cron');
 const { v4: uuidv4 } = require('uuid');
 const { runQuery, getRow, getAllRows } = require('./database');
 const { sendNotification } = require('./notifications');
+const { isRepeatActiveOn } = require('./recurrence');
 const { publishSensors } = require('./haSensors');
 
 // Track if scheduler is running
@@ -89,6 +90,9 @@ async function processRecurringTransactions() {
     
     for (const recurring of recurringTransactions) {
       try {
+        // Skip the series' own first date, and dates after it was stopped
+        if (!isRepeatActiveOn(recurring, today)) continue;
+
         const originalDate = new Date(recurring.date);
         let shouldProcess = false;
         
