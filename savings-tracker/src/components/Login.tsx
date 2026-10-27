@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Card, CardContent, Typography, Box, Alert, CircularProgress } from '@mui/material';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { useAuth } from '../AuthContext';
 
 const Login: React.FC = () => {
@@ -22,20 +23,33 @@ const Login: React.FC = () => {
   return (
     <Box
       sx={{
-        minHeight: '100%',
-        height: '100%',
+        minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#f5f5f5',
+        bgcolor: 'background.default',
         p: 2,
         boxSizing: 'border-box',
       }}
     >
       <Card sx={{ maxWidth: 400, width: '100%' }}>
-        <CardContent sx={{ p: 4 }}>
-          <Typography variant="h4" component="h1" gutterBottom align="center">
-            Savings Tracker
+        <CardContent sx={{ p: { xs: 3, sm: 4 }, '&:last-child': { pb: { xs: 3, sm: 4 } } }}>
+          <Box sx={{
+            width: 48,
+            height: 48,
+            borderRadius: '14px',
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            mx: 'auto',
+            mb: 2
+          }}>
+            <TrendingUpIcon />
+          </Box>
+          <Typography variant="h5" component="h1" gutterBottom align="center">
+            Savings
           </Typography>
           <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
             Choose your account to continue
@@ -64,7 +78,7 @@ const Login: React.FC = () => {
                   size="large"
                   onClick={() => handleLogin(user.id)}
                   disabled={isLoading}
-                  sx={{ py: 1.5 }}
+                  sx={{ minHeight: 52 }}
                 >
                   {isLoading ? 'Signing in...' : `Sign in as ${user.name}`}
                 </Button>

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { SavingsPot, User } from '../types';
 import { updateSavingsPot } from '../storage';
-import { Card, CardContent, Typography, Box, TextField, Button, LinearProgress, Chip } from '@mui/material';
+import { Card, CardContent, Typography, Box, TextField, Button, ButtonBase, LinearProgress, Chip } from '@mui/material';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useAuth } from '../AuthContext';
 
 interface SavingsPotCardProps {
@@ -40,135 +41,106 @@ const SavingsPotCard: React.FC<SavingsPotCardProps> = ({ pot, onUpdate, currentU
     ? Math.min((pot.currentTotal / pot.targetAmount) * 100, 100)
     : 0;
 
+  const formatGBP = (value: number) =>
+    `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   return (
-    <Card sx={{
-      borderLeft: 4,
-      borderColor: pot.color,
-      opacity: isCurrentUser ? 1 : 0.8
-    }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6" component="h3">
-              {pot.name}
-            </Typography>
-            {!isCurrentUser && (
-              <Chip
-                label={allUsers.find(u => u.id === pot.userId)?.name || pot.userId}
-                size="small"
-                variant="outlined"
-                sx={{ fontSize: '0.7rem' }}
-              />
-            )}
-          </Box>
-          <Box
-            sx={{
-              width: 20,
-              height: 20,
-              borderRadius: '50%',
-              backgroundColor: pot.color
-            }}
-          />
+    <Card sx={{ height: '100%', boxSizing: 'border-box' }}>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, height: '100%', boxSizing: 'border-box' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+          <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: pot.color, flexShrink: 0 }} />
+          <Typography variant="subtitle1" component="h3" sx={{ flexGrow: 1, minWidth: 0, lineHeight: 1.3 }} noWrap>
+            {pot.name}
+          </Typography>
+          {!isCurrentUser && (
+            <Chip
+              label={allUsers.find(u => u.id === pot.userId)?.name || pot.userId}
+              size="small"
+              sx={{ fontSize: '0.75rem', height: 22, bgcolor: 'action.hover', color: 'text.secondary' }}
+            />
+          )}
         </Box>
 
         {pot.description && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: -0.75 }} noWrap>
             {pot.description}
           </Typography>
         )}
 
-        <Box sx={{ mb: 2 }}>
-          {isEditing && isCurrentUser ? (
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Typography variant="body1">£</Typography>
-              <TextField
-                size="small"
-                type="number"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                autoFocus
-                inputProps={{
-                  step: "0.01",
-                  min: "0"
-                }}
-                sx={{ flex: 1 }}
-              />
-              <Button
-                size="small"
-                variant="contained"
-                color="primary"
-                onClick={handleSaveAmount}
-              >
-                Save
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={handleCancelEdit}
-              >
-                Cancel
-              </Button>
-            </Box>
-          ) : (
-            <Box
+        {isEditing && isCurrentUser ? (
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              size="small"
+              type="number"
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              autoFocus
+              inputProps={{
+                step: "0.01",
+                min: "0",
+                inputMode: 'decimal',
+                'aria-label': `New balance for ${pot.name}`
+              }}
+              InputProps={{ startAdornment: <Typography sx={{ mr: 0.5, color: 'text.secondary' }}>£</Typography> }}
+              sx={{ flex: '1 1 140px' }}
+            />
+            <Button size="small" variant="contained" onClick={handleSaveAmount}>
+              Save
+            </Button>
+            <Button size="small" onClick={handleCancelEdit} sx={{ color: 'text.secondary' }}>
+              Cancel
+            </Button>
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
+            <ButtonBase
               onClick={() => isCurrentUser && setIsEditing(true)}
+              disabled={!isCurrentUser}
+              aria-label={isCurrentUser ? `Edit balance of ${pot.name}` : undefined}
               sx={{
-                cursor: isCurrentUser ? 'pointer' : 'default',
-                p: 1,
                 borderRadius: 1,
-                '&:hover': isCurrentUser ? { backgroundColor: 'action.hover' } : {}
+                mx: -0.75,
+                px: 0.75,
+                justifyContent: 'flex-start',
+                '&:hover': isCurrentUser ? { bgcolor: 'action.hover' } : {}
               }}
             >
-              <Typography variant="h5" component="div" color="primary">
-                £{(pot?.currentTotal ?? 0).toFixed(2)}
+              <Typography component="span" sx={{ fontSize: { xs: '1.5rem', sm: '1.625rem' }, fontWeight: 700, color: 'text.primary' }}>
+                {formatGBP(pot?.currentTotal ?? 0)}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {isCurrentUser ? 'Click to edit' : 'Read-only'}
+              {isCurrentUser && <EditOutlinedIcon sx={{ fontSize: 16, color: 'text.secondary', ml: 0.75 }} />}
+            </ButtonBase>
+            {pot.interestRate != null && pot.interestRate > 0 && (
+              <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'primary.main', whiteSpace: 'nowrap' }}>
+                {pot.interestRate}% a year
               </Typography>
-            </Box>
+            )}
+          </Box>
+        )}
+
+        <Box sx={{ mt: 'auto' }}>
+          {pot.targetAmount ? (
+            <>
+              <LinearProgress
+                variant="determinate"
+                value={progressPercentage}
+                aria-label={`${progressPercentage.toFixed(0)}% of target`}
+                sx={{ mb: 0.75, '& .MuiLinearProgress-bar': { backgroundColor: pot.color } }}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+                {progressPercentage.toFixed(0)}% of £{pot.targetAmount.toLocaleString('en-GB')} target
+              </Typography>
+            </>
+          ) : pot.interestRate != null && pot.interestRate > 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+              ≈ £{((pot.currentTotal * pot.interestRate) / 100).toFixed(0)} a year in growth
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+              No target set
+            </Typography>
           )}
         </Box>
-
-        {pot.targetAmount && (
-          <Box sx={{ mb: pot.interestRate ? 1.5 : 0 }}>
-            <LinearProgress
-              variant="determinate"
-              value={progressPercentage}
-              sx={{
-                height: 8,
-                borderRadius: 4,
-                mb: 1,
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: pot.color,
-                }
-              }}
-            />
-            <Typography variant="body2" color="text.secondary">
-              {progressPercentage.toFixed(1)}% of £{pot.targetAmount.toFixed(2)} target
-            </Typography>
-          </Box>
-        )}
-
-        {pot.interestRate && pot.interestRate > 0 && (
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 1,
-            mt: pot.targetAmount ? 0 : 1,
-            p: 1,
-            bgcolor: 'success.50',
-            borderRadius: 1,
-            border: '1px solid',
-            borderColor: 'success.200'
-          }}>
-            <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 500 }}>
-              📈 {pot.interestRate}% p.a.
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              ~£{((pot.currentTotal * pot.interestRate) / 100).toFixed(0)}/year growth
-            </Typography>
-          </Box>
-        )}
       </CardContent>
     </Card>
   );

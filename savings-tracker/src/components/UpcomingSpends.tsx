@@ -33,6 +33,7 @@ import {
   deleteUpcomingSpend
 } from '../api';
 import { useAuth } from '../AuthContext';
+import { seriesColors } from '../theme';
 
 interface UpcomingSpendsProps {
   currentUser: User;
@@ -40,7 +41,7 @@ interface UpcomingSpendsProps {
 
 // Generate a consistent color for a user based on their index
 const getUserColor = (userId: string, allUsers: User[]): string => {
-  const colors = ['#667eea', '#e91e63', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+  const colors = seriesColors;
   const index = allUsers.findIndex(u => u.id === userId);
   return colors[index >= 0 ? index % colors.length : 0];
 };
@@ -136,10 +137,9 @@ const UpcomingSpends: React.FC<UpcomingSpendsProps> = ({ currentUser }) => {
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h3">
-            📋 Upcoming Spends
+            Upcoming spends
           </Typography>
           <Button
-            variant="outlined"
             size="small"
             startIcon={<Add />}
             onClick={() => handleOpenDialog()}
@@ -158,7 +158,7 @@ const UpcomingSpends: React.FC<UpcomingSpendsProps> = ({ currentUser }) => {
           </Typography>
         ) : (
           <>
-            <List dense sx={{ mb: 1 }}>
+            <List disablePadding sx={{ mb: 1 }}>
               {spends.map((spend) => {
                 const isOwner = spend.userId === currentUser.id;
                 const userColor = getUserColor(spend.userId, allUsers);
@@ -167,25 +167,26 @@ const UpcomingSpends: React.FC<UpcomingSpendsProps> = ({ currentUser }) => {
                   <ListItem
                     key={spend.id}
                     sx={{
-                      bgcolor: 'grey.50',
-                      borderRadius: 1,
-                      mb: 0.5,
-                      borderLeft: `4px solid ${userColor}`,
-                      pr: isOwner ? 12 : 2
+                      px: 0,
+                      py: 1,
+                      borderTop: 1,
+                      borderColor: 'divider',
+                      pr: isOwner ? 11 : 0
                     }}
                   >
                     <IconButton
                       size="small"
                       onClick={() => isOwner && handleToggleComplete(spend)}
-                      sx={{ mr: 1, color: isOwner ? 'primary.main' : 'grey.400' }}
+                      sx={{ mr: 1, ml: -0.5, color: isOwner ? 'primary.main' : 'text.disabled' }}
                       disabled={!isOwner}
+                      aria-label={`Mark ${spend.name} as done`}
                     >
                       <RadioButtonUnchecked fontSize="small" />
                     </IconButton>
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>
                             {spend.name}
                           </Typography>
                           <Chip
@@ -193,15 +194,16 @@ const UpcomingSpends: React.FC<UpcomingSpendsProps> = ({ currentUser }) => {
                             size="small"
                             sx={{
                               height: 20,
-                              fontSize: '0.65rem',
-                              bgcolor: `${userColor}20`,
-                              color: userColor
+                              fontSize: '0.75rem',
+                              bgcolor: 'action.hover',
+                              color: 'text.secondary',
+                              '&::before': { content: '""', width: 6, height: 6, borderRadius: '50%', bgcolor: userColor, ml: 1 }
                             }}
                           />
                         </Box>
                       }
                       secondary={
-                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                           £{spend.amount.toFixed(2)}
                         </Typography>
                       }
@@ -211,14 +213,16 @@ const UpcomingSpends: React.FC<UpcomingSpendsProps> = ({ currentUser }) => {
                         <IconButton
                           size="small"
                           onClick={() => handleOpenDialog(spend)}
-                          sx={{ mr: 0.5 }}
+                          sx={{ mr: 0.5, color: 'text.secondary' }}
+                          aria-label={`Edit ${spend.name}`}
                         >
                           <Edit fontSize="small" />
                         </IconButton>
                         <IconButton
                           size="small"
                           onClick={() => handleDelete(spend)}
-                          color="error"
+                          sx={{ color: 'text.secondary' }}
+                          aria-label={`Delete ${spend.name}`}
                         >
                           <Delete fontSize="small" />
                         </IconButton>
@@ -233,9 +237,9 @@ const UpcomingSpends: React.FC<UpcomingSpendsProps> = ({ currentUser }) => {
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Total upcoming:
+                Total upcoming
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 £{totalAmount.toFixed(2)}
               </Typography>
             </Box>

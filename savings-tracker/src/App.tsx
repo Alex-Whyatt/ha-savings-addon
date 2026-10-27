@@ -6,38 +6,32 @@ import BudgetSankey, { SavingsBreakdown } from './components/BudgetSankey';
 import Login from './components/Login';
 import { AuthProvider, useAuth } from './AuthContext';
 import { useSavingsData } from './hooks/useSavingsData';
-import { 
-  AppBar, 
-  Toolbar, 
-  Typography, 
-  Box, 
-  ThemeProvider, 
-  createTheme,
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Box,
+  ThemeProvider,
+  CssBaseline,
   BottomNavigation,
   BottomNavigationAction,
+  ButtonBase,
   Paper,
   IconButton,
+  Avatar,
+  Tooltip,
   useMediaQuery
 } from '@mui/material';
-import DashboardIcon from '@mui/icons-material/Dashboard';
+import InsightsIcon from '@mui/icons-material/Insights';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SavingsIcon from '@mui/icons-material/Savings';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import DonutLargeIcon from '@mui/icons-material/DonutLarge';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { theme } from './theme';
 import { startOfMonth, endOfMonth, getDay } from 'date-fns';
 
 type ViewType = 'dashboard' | 'calendar' | 'pots' | 'budget';
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#667eea',
-    },
-    secondary: {
-      main: '#764ba2',
-    },
-  },
-});
 
 const AppContent: React.FC = () => {
   const { user, logout, otherUsers } = useAuth();
@@ -136,204 +130,107 @@ const AppContent: React.FC = () => {
     return <Login />;
   }
 
-  const getPageTitle = () => {
-    switch (currentView) {
-      case 'dashboard': return 'Dashboard';
-      case 'calendar': return 'Calendar';
-      case 'pots': return 'Accounts';
-      case 'budget': return 'Budget';
-      default: return 'Dashboard';
-    }
-  };
+  const navItems: { key: ViewType; label: string; icon: React.ReactNode }[] = [
+    { key: 'dashboard', label: 'Overview', icon: <InsightsIcon /> },
+    { key: 'calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
+    { key: 'pots', label: 'Accounts', icon: <SavingsIcon /> },
+    { key: 'budget', label: 'Budget', icon: <DonutLargeIcon /> }
+  ];
+  const currentLabel = navItems.find(item => item.key === currentView)?.label ?? 'Overview';
 
   return (
     <Box sx={{
-      flexGrow: 1,
       minHeight: '100vh',
-      backgroundColor: '#f5f5f5',
+      bgcolor: 'background.default',
       width: '100%',
       overflowX: 'hidden',
-      overflowY: 'auto',
-      pb: isMobile ? '80px' : 0 // Space for bottom nav on mobile
+      pb: isMobile ? 'calc(80px + env(safe-area-inset-bottom))' : 0
     }}>
-      {/* Top AppBar */}
-      <AppBar 
-        position="fixed" 
+      <AppBar
+        position="sticky"
         elevation={0}
+        color="inherit"
         sx={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
+          bgcolor: 'background.paper',
+          borderBottom: 1,
+          borderColor: 'divider'
         }}
       >
-        <Toolbar sx={{ 
-          minHeight: { xs: 56, sm: 64 },
-          px: { xs: 2, sm: 3 }
-        }}>
-          {/* Logo/Title */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SavingsIcon sx={{ fontSize: { xs: 24, sm: 28 } }} />
-            <Typography
-              variant="h6"
-              component="div"
-              sx={{ 
-                fontWeight: 600,
-                fontSize: { xs: '1rem', sm: '1.25rem' },
-                letterSpacing: '-0.01em'
-              }}
-            >
-              {isMobile ? user.name : `Savings Tracker`}
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, px: { xs: 2, sm: 3 }, gap: { xs: 1.5, sm: 4 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <Box sx={{
+              width: 32,
+              height: 32,
+              borderRadius: '9px',
+              bgcolor: 'primary.main',
+              color: 'primary.contrastText',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <TrendingUpIcon sx={{ fontSize: 20 }} />
+            </Box>
+            <Typography component="div" sx={{ fontWeight: 700, fontSize: '1.125rem' }}>
+              {isMobile ? currentLabel : 'Savings'}
             </Typography>
           </Box>
 
-          <Box sx={{ flexGrow: 1 }} />
-
-          {/* Desktop Navigation */}
           {!isMobile && (
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 0.5,
-              mr: 2
-            }}>
-              {[
-                { key: 'dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
-                { key: 'calendar', label: 'Calendar', icon: <CalendarMonthIcon /> },
-                { key: 'pots', label: 'Accounts', icon: <SavingsIcon /> },
-                { key: 'budget', label: 'Budget', icon: <AccountBalanceWalletIcon /> }
-              ].map((item) => (
-                <Box
-                  key={item.key}
-                  onClick={() => setCurrentView(item.key as ViewType)}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.75,
-                    px: 2,
-                    py: 1,
-                    borderRadius: 2,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    backgroundColor: currentView === item.key 
-                      ? 'rgba(255,255,255,0.2)' 
-                      : 'transparent',
-                    color: currentView === item.key 
-                      ? '#fff' 
-                      : 'rgba(255,255,255,0.7)',
-                    '&:hover': {
-                      backgroundColor: currentView === item.key 
-                        ? 'rgba(255,255,255,0.25)' 
-                        : 'rgba(255,255,255,0.1)',
-                      color: '#fff'
-                    },
-                    fontWeight: currentView === item.key ? 600 : 400
-                  }}
-                >
-                  {item.icon}
-                  <Typography variant="body2" sx={{ fontWeight: 'inherit' }}>
+            <Box component="nav" aria-label="Sections" sx={{ display: 'flex', alignSelf: 'stretch', gap: 0.5 }}>
+              {navItems.map(item => {
+                const selected = currentView === item.key;
+                return (
+                  <ButtonBase
+                    key={item.key}
+                    onClick={() => setCurrentView(item.key)}
+                    aria-current={selected ? 'page' : undefined}
+                    sx={{
+                      px: 1.75,
+                      fontSize: '0.9375rem',
+                      fontWeight: selected ? 600 : 500,
+                      color: selected ? 'text.primary' : 'text.secondary',
+                      borderBottom: 2,
+                      borderColor: selected ? 'primary.main' : 'transparent',
+                      '&:hover': { color: 'text.primary' }
+                    }}
+                  >
                     {item.label}
-                  </Typography>
-                </Box>
-              ))}
+                  </ButtonBase>
+                );
+              })}
             </Box>
           )}
 
-          {/* User info & Logout */}
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: { xs: 1, sm: 2 },
-            borderLeft: { sm: '1px solid rgba(255,255,255,0.2)' },
-            pl: { sm: 2 }
-          }}>
+          <Box sx={{ flexGrow: 1 }} />
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {!isMobile && (
-              <Typography 
-                variant="body2" 
-                sx={{ 
-                  color: 'rgba(255,255,255,0.9)',
-                  fontWeight: 500
-                }}
-              >
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
                 {user.name}
               </Typography>
             )}
-            <IconButton
-              onClick={logout}
-              size="small"
-              sx={{
-                color: 'rgba(255,255,255,0.8)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                  color: '#fff'
-                }
-              }}
-            >
-              <LogoutIcon fontSize="small" />
-            </IconButton>
+            <Avatar sx={{ width: 34, height: 34, fontSize: '0.875rem', fontWeight: 700, bgcolor: 'action.hover', color: 'primary.main' }}>
+              {user.name.charAt(0).toUpperCase()}
+            </Avatar>
+            <Tooltip title="Switch user">
+              <IconButton onClick={logout} aria-label="Switch user" sx={{ color: 'text.secondary' }}>
+                <LogoutIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
         </Toolbar>
       </AppBar>
 
-      {/* Main Content */}
-      <Box sx={{
-        pt: { xs: '72px', sm: '80px' }, // Account for fixed AppBar
-        pb: { xs: 2, sm: 4 },
-        px: { xs: 2, sm: 3, md: 4, lg: 6, xl: 8 },
+      <Box component="main" sx={{
+        pt: { xs: 2, sm: 3.5 },
+        pb: { xs: 2, sm: 5 },
+        px: { xs: 2, sm: 3, md: 4 },
+        maxWidth: 1360,
+        mx: 'auto',
         width: '100%',
         minWidth: 0,
         boxSizing: 'border-box'
       }}>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 1.5,
-          mb: { xs: 2, sm: 3 }
-        }}>
-          <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: { xs: 40, sm: 48 },
-            height: { xs: 40, sm: 48 },
-            borderRadius: 2,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-          }}>
-            {currentView === 'dashboard' && <DashboardIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
-            {currentView === 'calendar' && <CalendarMonthIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
-            {currentView === 'pots' && <SavingsIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
-            {currentView === 'budget' && <AccountBalanceWalletIcon sx={{ fontSize: { xs: 22, sm: 26 } }} />}
-          </Box>
-          <Box>
-            <Typography
-              variant="h4"
-              component="h1"
-              sx={{
-                fontSize: { xs: '1.25rem', sm: '1.5rem', md: '1.75rem' },
-                fontWeight: 700,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                lineHeight: 1.2
-              }}
-            >
-              {getPageTitle()}
-            </Typography>
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                color: 'text.secondary',
-                display: { xs: 'none', sm: 'block' }
-              }}
-            >
-              {currentView === 'dashboard' && 'Overview of your savings progress'}
-              {currentView === 'calendar' && 'Track your monthly contributions'}
-              {currentView === 'pots' && 'Manage your savings accounts'}
-              {currentView === 'budget' && 'Visualize your salary allocation'}
-            </Typography>
-          </Box>
-        </Box>
-
         {currentView === 'dashboard' && (
           <Dashboard
             data={combinedData}
@@ -365,61 +262,64 @@ const AppContent: React.FC = () => {
         )}
       </Box>
 
-      {/* Mobile Bottom Navigation */}
       {isMobile && (
-        <Paper 
-          sx={{ 
-            position: 'fixed', 
-            bottom: 0, 
-            left: 0, 
+        <Paper
+          component="nav"
+          aria-label="Sections"
+          elevation={0}
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
             right: 0,
-            borderTop: '1px solid rgba(0,0,0,0.08)',
+            borderTop: 1,
+            borderColor: 'divider',
+            borderRadius: 0,
+            pb: 'env(safe-area-inset-bottom)',
             zIndex: 1100
-          }} 
-          elevation={8}
+          }}
         >
           <BottomNavigation
             value={currentView}
             onChange={(_, newValue) => setCurrentView(newValue)}
+            showLabels
             sx={{
-              height: 64,
+              height: 72,
+              bgcolor: 'transparent',
               '& .MuiBottomNavigationAction-root': {
-                minWidth: 'auto',
-                padding: '6px 12px',
-                color: 'rgba(0,0,0,0.5)',
-                '&.Mui-selected': {
-                  color: '#667eea'
-                }
+                minWidth: 0,
+                px: 0.5,
+                gap: 0.5,
+                color: 'text.secondary'
               },
               '& .MuiBottomNavigationAction-label': {
-                fontSize: '0.7rem',
-                '&.Mui-selected': {
-                  fontSize: '0.75rem',
-                  fontWeight: 600
-                }
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                '&.Mui-selected': { fontSize: '0.75rem', fontWeight: 600, color: 'text.primary' }
+              },
+              '& .nav-pill': {
+                width: 56,
+                height: 30,
+                borderRadius: 15,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background-color 0.2s'
+              },
+              '& .Mui-selected .nav-pill': {
+                bgcolor: 'action.hover',
+                color: 'primary.main'
               }
             }}
           >
-            <BottomNavigationAction 
-              label="Dashboard" 
-              value="dashboard" 
-              icon={<DashboardIcon />} 
-            />
-            <BottomNavigationAction 
-              label="Calendar" 
-              value="calendar" 
-              icon={<CalendarMonthIcon />} 
-            />
-            <BottomNavigationAction 
-              label="Accounts" 
-              value="pots" 
-              icon={<SavingsIcon />} 
-            />
-            <BottomNavigationAction 
-              label="Budget" 
-              value="budget" 
-              icon={<AccountBalanceWalletIcon />} 
-            />
+            {navItems.map(item => (
+              <BottomNavigationAction
+                key={item.key}
+                label={item.label}
+                value={item.key}
+                icon={<Box className="nav-pill">{item.icon}</Box>}
+              />
+            ))}
           </BottomNavigation>
         </Paper>
       )}
@@ -430,6 +330,7 @@ const AppContent: React.FC = () => {
 function App() {
   return (
     <ThemeProvider theme={theme}>
+      <CssBaseline />
       <AuthProvider>
         <AppContent />
       </AuthProvider>

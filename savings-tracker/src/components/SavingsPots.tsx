@@ -14,6 +14,7 @@ import {
   TextField,
   IconButton,
   LinearProgress,
+  ButtonBase,
   Fab,
   useMediaQuery,
   useTheme
@@ -21,6 +22,7 @@ import {
 import { Add, Edit, Delete } from '@mui/icons-material';
 import ExpenseCategories from './ExpenseCategories';
 import { useAuth } from '../AuthContext';
+import { seriesColors } from '../theme';
 
 interface SavingsPotsProps {
   pots: SavingsPot[];
@@ -39,14 +41,10 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
     currentTotal: '0',
     targetAmount: '',
     interestRate: '',
-    color: '#667eea'
+    color: seriesColors[0]
   });
 
-  const colors = [
-    '#667eea', '#764ba2', '#f093fb', '#f5576c',
-    '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
-    '#fa709a', '#fee140', '#a8edea', '#fed6e3'
-  ];
+  const colors = seriesColors;
 
   const resetForm = () => {
     setFormData({
@@ -55,7 +53,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
       currentTotal: '0',
       targetAmount: '',
       interestRate: '',
-      color: '#667eea'
+      color: seriesColors[0]
     });
   };
 
@@ -134,13 +132,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
   return (
     <Box sx={{ position: 'relative', minHeight: '60vh' }}>
       {/* Summary Card */}
-      <Card 
-        sx={{ 
-          mb: 3,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white'
-        }}
-      >
+      <Card sx={{ mb: { xs: 2, sm: 3 } }}>
         <CardContent sx={{ py: { xs: 2, sm: 3 } }}>
           <Box sx={{ 
             display: 'flex', 
@@ -150,10 +142,10 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
             gap: 2
           }}>
             <Box>
-              <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mb: 0.25 }}>
                 Total across {pots.length} account{pots.length !== 1 ? 's' : ''}
               </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              <Typography component="div" sx={{ fontSize: { xs: '1.875rem', sm: '2.25rem' }, fontWeight: 700, letterSpacing: '-0.02em' }}>
                 £{totalSaved.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
               </Typography>
             </Box>
@@ -163,14 +155,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                 startIcon={<Add />}
                 onClick={() => setShowAddForm(true)}
                 disabled={showAddForm || editingPot !== null}
-                sx={{
-                  backgroundColor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.3)'
-                  },
-                  whiteSpace: 'nowrap'
-                }}
+                sx={{ whiteSpace: 'nowrap' }}
               >
                 New Account
               </Button>
@@ -185,9 +170,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
         onClose={handleCancel}
         maxWidth="sm"
         fullWidth
-        PaperProps={{
-          sx: { borderRadius: 2 }
-        }}
+        fullScreen={isMobile}
       >
         <DialogTitle sx={{ 
           pb: 1,
@@ -265,20 +248,19 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {colors.map(color => (
-                <Box
+                <ButtonBase
                   key={color}
                   onClick={() => setFormData({...formData, color})}
+                  aria-label={`Colour ${color}`}
+                  aria-pressed={formData.color === color}
                   sx={{
-                    width: 36,
-                    height: 36,
+                    width: 40,
+                    height: 40,
                     borderRadius: '50%',
                     backgroundColor: color,
-                    cursor: 'pointer',
-                    border: formData.color === color ? '3px solid #333' : '2px solid transparent',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      transform: 'scale(1.1)'
-                    }
+                    outline: formData.color === color ? '3px solid' : 'none',
+                    outlineColor: 'text.primary',
+                    outlineOffset: 2
                   }}
                 />
               ))}
@@ -288,13 +270,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
             <Button onClick={handleCancel} sx={{ color: 'text.secondary' }}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              variant="contained"
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              }}
-            >
+            <Button type="submit" variant="contained">
               {editingPot ? 'Save Changes' : 'Create Account'}
             </Button>
           </DialogActions>
@@ -322,9 +298,6 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
               variant="contained"
               startIcon={<Add />}
               onClick={() => setShowAddForm(true)}
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              }}
             >
               Add First Account
             </Button>
@@ -346,44 +319,25 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
               : 0;
             
             return (
-              <Card 
-                key={pot.id} 
-                sx={{ 
-                  position: 'relative',
-                  overflow: 'visible',
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 4,
-                    backgroundColor: pot.color,
-                    borderRadius: '4px 4px 0 0'
-                  }
-                }}
-              >
-                <CardContent sx={{ pt: 2.5 }}>
+              <Card key={pot.id}>
+                <CardContent>
                   <Box sx={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
                     alignItems: 'flex-start',
                     mb: 1
                   }}>
-                    <Typography 
-                      variant="subtitle1" 
-                      component="h3" 
-                      sx={{ 
-                        fontWeight: 600,
-                        color: 'text.primary'
-                      }}
-                    >
-                      {pot.name}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, pt: 0.75 }}>
+                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: pot.color, flexShrink: 0 }} />
+                      <Typography variant="subtitle1" component="h3" noWrap>
+                        {pot.name}
+                      </Typography>
+                    </Box>
                     <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
                       <IconButton 
                         size="small" 
                         onClick={() => handleEdit(pot)}
+                        aria-label={`Edit ${pot.name}`}
                         sx={{ 
                           color: 'text.secondary',
                           '&:hover': { color: 'primary.main' }
@@ -394,6 +348,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                       <IconButton 
                         size="small" 
                         onClick={() => handleDelete(pot.id)}
+                        aria-label={`Delete ${pot.name}`}
                         sx={{ 
                           color: 'text.secondary',
                           '&:hover': { color: 'error.main' }
@@ -424,7 +379,6 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                     variant="h5" 
                     sx={{ 
                       fontWeight: 700,
-                      color: pot.color,
                       mb: pot.targetAmount ? 1.5 : 0
                     }}
                   >
@@ -437,14 +391,8 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                         variant="determinate"
                         value={progressPercentage}
                         sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: 'rgba(0,0,0,0.08)',
                           mb: 0.75,
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: pot.color,
-                            borderRadius: 3
-                          }
+                          '& .MuiLinearProgress-bar': { backgroundColor: pot.color }
                         }}
                       />
                       <Box sx={{ 
@@ -463,20 +411,9 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
                   )}
 
                   {pot.interestRate && pot.interestRate > 0 && (
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 1,
-                      mt: pot.targetAmount ? 0 : 1.5,
-                      p: 1,
-                      bgcolor: 'rgba(76, 175, 80, 0.08)',
-                      borderRadius: 1,
-                      border: '1px solid rgba(76, 175, 80, 0.2)'
-                    }}>
-                      <Typography variant="body2" sx={{ color: 'success.main', fontWeight: 500 }}>
-                        📈 {pot.interestRate}% p.a.
-                      </Typography>
-                    </Box>
+                    <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 600, mt: pot.targetAmount ? 0 : 1 }}>
+                      {pot.interestRate}% a year · ≈ £{((pot.currentTotal * pot.interestRate) / 100).toFixed(0)} growth
+                    </Typography>
                   )}
                 </CardContent>
               </Card>
@@ -488,10 +425,7 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
       {/* Expense Categories Section */}
       {user && (
         <Box sx={{ mt: 4 }}>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ 
-            fontWeight: 600,
-            color: 'text.primary'
-          }}>
+          <Typography variant="h6" component="h2" gutterBottom>
             Expense Categories
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -505,13 +439,13 @@ const SavingsPots: React.FC<SavingsPotsProps> = ({ pots, onDataChange }) => {
       {isMobile && (
         <Fab
           color="primary"
+          aria-label="New account"
           onClick={() => setShowAddForm(true)}
           disabled={showAddForm || editingPot !== null}
           sx={{
             position: 'fixed',
-            bottom: 80, // Above bottom nav
+            bottom: 'calc(88px + env(safe-area-inset-bottom))', // Above bottom nav
             right: 16,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             zIndex: 1000
           }}
         >

@@ -1,13 +1,10 @@
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, TooltipProps } from 'recharts';
 import { SavingsProjection, SavingsPot } from '../types';
 import { format, isAfter, startOfDay } from 'date-fns';
 import { Box, Typography, useTheme, useMediaQuery } from '@mui/material';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import SavingsIcon from '@mui/icons-material/Savings';
-import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import { useAuth } from '../AuthContext';
+import { seriesColors, cssVars } from '../theme';
 
 interface ProjectionChartProps {
   projections: SavingsProjection[];
@@ -22,129 +19,50 @@ interface ChartDataPoint {
   isProjected: boolean;
 }
 
-// Colors for different users in the tooltip
-const userColors = ['#2196f3', '#e91e63', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4'];
+const formatGBP = (value: number) =>
+  `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface CustomTooltipProps extends TooltipProps<number, string> {
   userNames: Record<string, string>;
+  userColor: (userId: string) => string;
 }
 
-const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, userNames }) => {
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, userNames, userColor }) => {
   if (active && payload && payload.length > 0) {
     const data = payload[0].payload as ChartDataPoint;
-    const userIds = Object.keys(data.byUser);
-    
+
     return (
-      <div style={{
-        backgroundColor: 'white',
-        padding: '12px 16px',
-        border: '1px solid #e0e0e0',
-        borderRadius: '8px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+      <Box sx={{
+        bgcolor: 'background.paper',
+        color: 'text.primary',
+        p: 1.5,
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 2.5,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+        fontSize: '0.875rem',
+        minWidth: 180
       }}>
-        <p style={{ 
-          margin: '0 0 8px 0', 
-          fontWeight: 'bold',
-          color: '#333',
-          borderBottom: '1px solid #eee',
-          paddingBottom: '8px'
-        }}>
-          {label} {data.isProjected && <span style={{ color: '#667eea', fontSize: '0.85em' }}>(Projected)</span>}
-        </p>
-        {userIds.map((userId, index) => (
-          <p key={userId} style={{ margin: '4px 0', color: userColors[index % userColors.length] }}>
-            {userNames[userId] || userId}: £{(data.byUser[userId] || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
+        <Box sx={{ fontWeight: 700, mb: 1 }}>
+          {label}{' '}
+          {data.isProjected && <Box component="span" sx={{ color: 'text.secondary', fontWeight: 500 }}>· projected</Box>}
+        </Box>
+        {Object.keys(data.byUser).map(userId => (
+          <Box key={userId} sx={{ display: 'flex', alignItems: 'center', gap: 1, my: 0.5 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: userColor(userId) }} />
+            <Box sx={{ flexGrow: 1, color: 'text.secondary' }}>{userNames[userId] || userId}</Box>
+            <Box sx={{ fontWeight: 600 }}>{formatGBP(data.byUser[userId] || 0)}</Box>
+          </Box>
         ))}
-        <p style={{ 
-          margin: '8px 0 0 0', 
-          fontWeight: 'bold',
-          color: '#667eea',
-          borderTop: '1px solid #eee',
-          paddingTop: '8px'
-        }}>
-          Total: £{data.total.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-        </p>
-      </div>
+        <Box sx={{ display: 'flex', mt: 1, pt: 1, borderTop: 1, borderColor: 'divider', fontWeight: 700 }}>
+          <Box sx={{ flexGrow: 1 }}>Total</Box>
+          {formatGBP(data.total)}
+        </Box>
+      </Box>
     );
   }
   return null;
 };
-
-// Stat card component for the highlights
-interface StatCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sublabel?: string;
-  color: string;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, sublabel, color }) => (
-  <Box sx={{
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: { xs: 1, sm: 2 },
-    p: { xs: 1.5, sm: 2 },
-    borderRadius: 2,
-    backgroundColor: `${color}08`,
-    border: `1px solid ${color}20`,
-  }}>
-    <Box sx={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: { xs: 32, sm: 44 },
-      height: { xs: 32, sm: 44 },
-      minWidth: { xs: 32, sm: 44 },
-      borderRadius: 1.5,
-      backgroundColor: `${color}15`,
-      color: color,
-      flexShrink: 0,
-      mt: 0.25
-    }}>
-      {icon}
-    </Box>
-    <Box sx={{ minWidth: 0, flex: 1 }}>
-      <Typography 
-        variant="caption" 
-        sx={{ 
-          color: 'text.secondary',
-          display: 'block',
-          fontSize: { xs: '0.6rem', sm: '0.75rem' },
-          lineHeight: 1.2
-        }}
-      >
-        {label}
-      </Typography>
-      <Typography 
-        variant="h6" 
-        sx={{ 
-          fontWeight: 700,
-          color: color,
-          fontSize: { xs: '0.9rem', sm: '1.25rem' },
-          lineHeight: 1.2
-        }}
-      >
-        {value}
-      </Typography>
-      {sublabel && (
-        <Typography 
-          variant="caption" 
-          sx={{ 
-            color: 'text.secondary',
-            fontSize: { xs: '0.5rem', sm: '0.65rem' },
-            lineHeight: 1.3,
-            display: 'block',
-            wordBreak: 'break-word'
-          }}
-        >
-          {sublabel}
-        </Typography>
-      )}
-    </Box>
-  </Box>
-);
 
 const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) => {
   const theme = useTheme();
@@ -237,173 +155,127 @@ const ProjectionChart: React.FC<ProjectionChartProps> = ({ projections, pots }) 
     return `£${value.toFixed(0)}`;
   };
 
-  // Build sublabel for monthly savings
-  const monthlySublabel = userIds
-    .map(userId => `${userNames[userId] || userId}: ${formatCurrency(monthlyContributionByUser[userId] || 0)}`)
-    .join(' · ');
-  
   // Calculate yearly growth
   const yearlyGrowth = projectedIn12Months - currentTotal;
   const yearlyGrowthPercent = currentTotal > 0 
     ? ((yearlyGrowth / currentTotal) * 100).toFixed(1)
     : '0';
 
-  const chartHeight = isMobile ? 280 : 400;
-  const chartMargins = isMobile 
-    ? { top: 10, right: 10, left: -10, bottom: 5 }
-    : { top: 10, right: 30, left: 10, bottom: 5 };
+  const userColor = (userId: string) => {
+    const index = allUsers.findIndex(u => u.id === userId);
+    return seriesColors[(index >= 0 ? index : userIds.indexOf(userId)) % seriesColors.length];
+  };
+
+  const chartHeight = isMobile ? 220 : 320;
 
   return (
     <Box sx={{ width: '100%' }}>
-      {/* Chart */}
-      <Box sx={{ width: '100%', overflowX: 'hidden', mb: 3 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 4, rowGap: 1.5, mb: 2 }}>
+        <Box>
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', fontWeight: 500 }}>12-month growth</Typography>
+          <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>
+            +{formatCurrency(yearlyGrowth)}{' '}
+            <Box component="span" sx={{ fontSize: '0.875rem', color: 'primary.main', fontWeight: 600 }}>+{yearlyGrowthPercent}%</Box>
+          </Typography>
+        </Box>
+        <Box>
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', fontWeight: 500 }}>Saving per month</Typography>
+          <Typography sx={{ fontSize: '1.25rem', fontWeight: 700 }}>{formatCurrency(monthlyContribution)}</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: { sm: 'auto' }, flexWrap: 'wrap' }}>
+          {userIds.map(userId => (
+            <Box key={userId} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, fontSize: '0.8125rem', color: 'text.secondary' }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: userColor(userId) }} />
+              {userNames[userId] || userId}
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
+      <Box sx={{ width: '100%', mx: { xs: -1, sm: 0 } }}>
         <ResponsiveContainer width="100%" height={chartHeight}>
-          <LineChart data={chartData} margin={chartMargins}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis 
-              dataKey="date" 
-              tick={{ fontSize: isMobile ? 10 : 12 }}
+          <AreaChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke={cssVars.divider} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={(value: string) => value.replace(/ (\d{2})(\d{2})$/, ' ’$2')}
+              tick={{ fontSize: 12, fill: cssVars.textSecondary }}
+              tickLine={false}
+              axisLine={false}
               tickMargin={8}
-              interval={isMobile ? 2 : 1}
+              interval={isMobile ? 3 : 1}
+              padding={{ left: 8, right: 24 }}
             />
-            <YAxis 
+            <YAxis
               tickFormatter={(value) => `£${(value / 1000).toFixed(0)}k`}
-              tick={{ fontSize: isMobile ? 10 : 12 }}
-              width={isMobile ? 45 : 60}
+              tick={{ fontSize: 12, fill: cssVars.textSecondary }}
+              tickLine={false}
+              axisLine={false}
+              width={44}
             />
-            <Tooltip content={<CustomTooltip userNames={userNames} />} />
-            <Legend 
-              wrapperStyle={{ 
-                fontSize: isMobile ? '12px' : '14px',
-                paddingTop: '10px'
-              }}
+            <Tooltip
+              content={<CustomTooltip userNames={userNames} userColor={userColor} />}
+              cursor={{ stroke: cssVars.divider, strokeWidth: 1 }}
             />
-            <Line
-              type="monotone"
-              dataKey="total"
-              name="Total Combined Savings"
-              stroke="#667eea"
-              strokeWidth={isMobile ? 2 : 3}
-              dot={(props: any) => {
-                const { cx, cy, payload } = props;
-                const dotRadius = isMobile ? 3 : 4;
-                if (!payload.isProjected) {
-                  return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={dotRadius} fill="#667eea" stroke="#667eea" />;
-                }
-                return <circle key={`dot-${payload.date}`} cx={cx} cy={cy} r={dotRadius} fill="#667eea" stroke="#667eea" strokeDasharray="2 2" opacity={0.6} />;
-              }}
-              activeDot={{ r: isMobile ? 5 : 6 }}
-            />
-          </LineChart>
+            {userIds.map(userId => (
+              <Area
+                key={userId}
+                type="monotone"
+                dataKey={(d: ChartDataPoint) => d.byUser[userId] || 0}
+                name={userNames[userId] || userId}
+                stackId="savings"
+                stroke={userColor(userId)}
+                strokeWidth={2}
+                fill={userColor(userId)}
+                fillOpacity={0.18}
+                activeDot={{ r: 4 }}
+              />
+            ))}
+          </AreaChart>
         </ResponsiveContainer>
       </Box>
 
-      {/* Insights Grid */}
-      <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: {
-          xs: 'repeat(2, minmax(0, 1fr))',
-          sm: 'repeat(4, minmax(0, 1fr))'
-        },
-        gap: { xs: 1, sm: 2 }
-      }}>
-        <StatCard
-          icon={<SavingsIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
-          label="Current Total"
-          value={formatCurrency(currentTotal)}
-          color="#667eea"
-        />
-        <StatCard
-          icon={<CalendarMonthIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
-          label="Monthly Savings"
-          value={formatCurrency(monthlyContribution)}
-          sublabel={monthlySublabel}
-          color="#4facfe"
-        />
-        <StatCard
-          icon={<TrendingUpIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
-          label="12-Month Growth"
-          value={formatCurrency(yearlyGrowth)}
-          sublabel={`+${yearlyGrowthPercent}%`}
-          color="#43e97b"
-        />
-        <StatCard
-          icon={<AccountBalanceIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />}
-          label="Projected Total"
-          value={formatCurrency(projectedIn12Months)}
-          sublabel={chartData[chartData.length - 1]?.date}
-          color="#764ba2"
-        />
-      </Box>
-
-      {/* Monthly Breakdown Table */}
-      {!isMobile && chartData.length > 0 && (
-        <Box sx={{ mt: 3 }}>
-          <Typography 
-            variant="subtitle2" 
-            sx={{ 
-              mb: 1.5, 
-              color: 'text.secondary',
-              fontWeight: 600 
-            }}
-          >
-            Monthly Projection Breakdown
+      {chartData.length > 0 && (
+        <Box sx={{ mt: 2.5 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>
+            Month by month
           </Typography>
           <Box sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, 1fr)',
+            display: 'flex',
             gap: 1,
-            backgroundColor: '#f8f9fa',
-            borderRadius: 2,
-            p: 2
+            overflowX: 'auto',
+            pb: 1,
+            mx: { xs: -2.5, sm: 0 },
+            px: { xs: 2.5, sm: 0 },
+            scrollSnapType: 'x mandatory'
           }}>
-            {chartData.slice(0, 12).map((point, index) => {
+            {chartData.map((point, index) => {
               const prevTotal = index > 0 ? chartData[index - 1].total : point.total;
               const monthlyChange = point.total - prevTotal;
-              
+
               return (
-                <Box 
+                <Box
                   key={point.date}
                   sx={{
-                    textAlign: 'center',
-                    p: 1,
-                    borderRadius: 1,
-                    backgroundColor: point.isProjected ? 'rgba(102, 126, 234, 0.08)' : 'white',
-                    border: point.isProjected ? '1px dashed rgba(102, 126, 234, 0.3)' : '1px solid #e0e0e0'
+                    flex: '0 0 auto',
+                    minWidth: 84,
+                    scrollSnapAlign: 'start',
+                    p: 1.25,
+                    borderRadius: 2,
+                    border: '1px dashed',
+                    borderColor: 'divider',
+                    ...(!point.isProjected && { borderStyle: 'solid', bgcolor: 'action.hover' })
                   }}
                 >
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      display: 'block',
-                      color: 'text.secondary',
-                      fontSize: '0.65rem',
-                      mb: 0.5
-                    }}
-                  >
-                    {point.date}
+                  <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 500 }}>
+                    {format(point.fullDate, 'MMM yy')}
                   </Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      fontWeight: 600,
-                      color: '#667eea',
-                      fontSize: '0.8rem'
-                    }}
-                  >
+                  <Typography sx={{ fontSize: '0.9375rem', fontWeight: 700 }}>
                     £{(point.total / 1000).toFixed(1)}k
                   </Typography>
-                  {index > 0 && monthlyChange > 0 && (
-                    <Typography 
-                      variant="caption" 
-                      sx={{ 
-                        color: '#43e97b',
-                        fontSize: '0.6rem'
-                      }}
-                    >
-                      +£{monthlyChange.toFixed(0)}
-                    </Typography>
-                  )}
+                  <Typography sx={{ fontSize: '0.75rem', color: 'primary.main', fontWeight: 600, minHeight: '1.2em' }}>
+                    {index > 0 && monthlyChange > 0 ? `+£${monthlyChange.toFixed(0)}` : ''}
+                  </Typography>
                 </Box>
               );
             })}
