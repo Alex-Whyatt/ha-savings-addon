@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 const { runQuery, getRow, getAllRows } = require('./database');
 const { sendNotification } = require('./notifications');
 const { isRepeatActiveOn } = require('./recurrence');
+const { publishSensors } = require('./haSensors');
 
 // Track if scheduler is running
 let schedulerRunning = false;
@@ -241,6 +242,11 @@ async function runProcessingCycle() {
   
   // Send notifications
   await notifyProcessedTransactions(results);
+
+  // Recurring payments change the totals, so refresh the HA sensors
+  if (results.processed.length > 0) {
+    await publishSensors();
+  }
   
   console.log('='.repeat(60));
   console.log('✅ Processing cycle complete\n');
