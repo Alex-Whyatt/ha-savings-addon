@@ -5,6 +5,7 @@ const fs = require('fs');
 const routes = require('./routes');
 const { initializeScheduler } = require('./scheduler');
 const { initializeNotifications } = require('./notifications');
+const { initializeSensors, scheduleSensorUpdate } = require('./haSensors');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -61,6 +62,11 @@ function loadHomeAssistantOptions() {
         
         console.log(`   Notifications: ${options.notifications.enabled ? 'enabled' : 'disabled'}`);
       }
+
+      // Set Home Assistant sensors configuration
+      if (options.sensors !== undefined) {
+        process.env.HA_SENSORS_ENABLED = String(options.sensors);
+      }
       
       return options;
     }
@@ -76,6 +82,16 @@ loadHomeAssistantOptions();
 
 // Re-initialize notifications with updated config
 initializeNotifications();
+
+// Refresh the Home Assistant sensors after any successful change
+app.use('/api', (req, res, next) => {
+  if (req.method !== 'GET') {
+    res.on('finish', () => {
+      if (res.statusCode < 400) scheduleSensorUpdate();
+    });
+  }
+  next();
+});
 
 // API routes
 console.log('🔧 Mounting API routes at /api');
@@ -110,4 +126,6 @@ app.listen(PORT, () => {
   } else {
     console.log('⏰ Scheduler is disabled');
   }
+
+  initializeSensors();
 });
