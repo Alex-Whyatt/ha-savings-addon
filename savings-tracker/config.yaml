@@ -1,6 +1,6 @@
 ---
 name: Savings Tracker
-version: "1.6.0"
+version: "1.7.0"
 slug: savings-tracker
 description: A modern web-based savings tracker with calendar interface, automatic recurring transaction processing, and Home Assistant notifications
 url: "https://github.com/Alex-Whyatt/ha-savings-addon"
@@ -33,6 +33,7 @@ options:
     services: []
     default_service: ""
   sensors: true
+  fund_prices: true
 
 schema:
   users:
@@ -48,3 +49,4 @@ schema:
         service: str
     default_service: str?
   sensors: bool?
+  fund_prices: bool?

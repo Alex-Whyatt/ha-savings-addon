@@ -5,7 +5,8 @@ const fs = require('fs');
 const routes = require('./routes');
 const { initializeScheduler } = require('./scheduler');
 const { initializeNotifications } = require('./notifications');
-const { initializeSensors, scheduleSensorUpdate } = require('./haSensors');
+const { initializeSensors, scheduleSensorUpdate, publishSensors } = require('./haSensors');
+const { initializeFundPrices } = require('./fundPrices');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -66,6 +67,11 @@ function loadHomeAssistantOptions() {
       // Set Home Assistant sensors configuration
       if (options.sensors !== undefined) {
         process.env.HA_SENSORS_ENABLED = String(options.sensors);
+      }
+
+      // Set fund price lookup configuration
+      if (options.fund_prices !== undefined) {
+        process.env.FUND_PRICES_ENABLED = String(options.fund_prices);
       }
       
       return options;
@@ -128,4 +134,5 @@ app.listen(PORT, () => {
   }
 
   initializeSensors();
+  initializeFundPrices(publishSensors);
 });
