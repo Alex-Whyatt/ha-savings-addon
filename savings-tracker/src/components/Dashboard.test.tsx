@@ -10,6 +10,11 @@ vi.mock('../AuthContext', () => ({
   useAuth: vi.fn()
 }))
 
+// Funds and growth are fetched from the API
+vi.mock('../api', () => ({
+  fetchInvestments: vi.fn().mockResolvedValue([])
+}))
+
 // Mock the child components
 vi.mock('./SavingsPotCard', () => ({
   default: ({ pot }: { pot: any }) => <div data-testid={`pot-${pot.id}`}>{pot.name}</div>
