@@ -13,6 +13,7 @@ A modern, mobile-friendly savings tracker that runs directly on your Home Assist
 - 🔒 **Private** — All data stays on your Home Assistant system
 - ⏰ **Auto-Processing** — Recurring transactions are automatically applied daily
 - 🔔 **Notifications** — Get notified via Home Assistant when savings are updated
+- 🏠 **Dashboard sensors** — Show your household total and this month's savings on any Home Assistant dashboard
 
 ## 📦 Installation
 
@@ -112,6 +113,42 @@ notifications:
 > 
 > £100.00 added to Cash ISA
 > New total: £5,250.00
+
+### Dashboard Sensors
+
+The add-on publishes your household savings to Home Assistant as sensors, so you can show them on any dashboard. They update a couple of seconds after any change in the app, and every 5 minutes (which also restores them after Home Assistant restarts).
+
+| Sensor | Shows | Attributes |
+|--------|-------|------------|
+| `sensor.savings_tracker_total` | Everything saved, both of you combined | `people` (each person's total), `accounts` |
+| `sensor.savings_tracker_saved_this_month` | What you've both paid in so far this month | `monthly_plan`, `people` |
+| `sensor.savings_tracker_monthly_plan` | Your recurring contributions per month | `people` |
+
+Because the sensors are recorded like any other entity, Home Assistant also keeps their history, so a history graph card shows your savings over time.
+
+**Example card** (edit a dashboard → **Add card** → **Manual**, then paste):
+
+```yaml
+type: vertical-stack
+cards:
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: tile
+        entity: sensor.savings_tracker_total
+        name: Total savings
+      - type: tile
+        entity: sensor.savings_tracker_saved_this_month
+        name: Saved this month
+  - type: markdown
+    content: >
+      {% set saved = states('sensor.savings_tracker_saved_this_month') | float(0) %}
+      {% set plan = state_attr('sensor.savings_tracker_saved_this_month', 'monthly_plan') | float(0) %}
+      **£{{ '{:,.0f}'.format(saved) }}** of £{{ '{:,.0f}'.format(plan) }} saved together this month
+```
+
+The sensors need no setup. To turn them off, add `sensors: false` to the add-on configuration.
 
 ### Automatic Setup
 
