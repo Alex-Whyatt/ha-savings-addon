@@ -122,6 +122,36 @@ function initializeDatabase() {
     )
   `);
 
+  // Funds held in an investment account, used to work out its expected return
+  db.run(`
+    CREATE TABLE IF NOT EXISTS pot_holdings (
+      id TEXT PRIMARY KEY,
+      pot_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      identifier TEXT,
+      allocation REAL,
+      expected_return REAL,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (pot_id) REFERENCES savings_pots (id) ON DELETE CASCADE
+    )
+  `);
+
+  // Recorded account values, so market growth can be told apart from money paid in
+  db.run(`
+    CREATE TABLE IF NOT EXISTS pot_valuations (
+      id TEXT PRIMARY KEY,
+      pot_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      value REAL NOT NULL,
+      previous_value REAL NOT NULL,
+      date TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (pot_id) REFERENCES savings_pots (id) ON DELETE CASCADE
+    )
+  `);
+
   // Create processed_recurring table to track which recurring transaction instances have been auto-processed
   db.run(`
     CREATE TABLE IF NOT EXISTS processed_recurring (

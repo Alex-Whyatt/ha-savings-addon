@@ -74,4 +74,12 @@ describe('buildSavingsSummary', () => {
     ], now);
     expect(summary.monthlyPlan).toBe(100);
   });
+
+  it('leaves recurring payments that have ended out of the monthly plan', () => {
+    const summary = buildSavingsSummary(users, pots, [
+      tx({ amount: 500, repeat_monthly: 1, date: '2026-01-28T12:00:00.000Z', repeat_until: '2026-10-01T00:00:00.000Z' }),
+      tx({ amount: 200, repeat_monthly: 1, date: '2026-01-28T12:00:00.000Z', repeat_until: '2027-01-01T00:00:00.000Z' })
+    ], now);
+    expect(summary.monthlyPlan).toBe(200);
+  });
 });

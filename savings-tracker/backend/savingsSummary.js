@@ -29,6 +29,7 @@ function countWeekdayInMonth(weekday, date) {
  * Monthly value of a recurring transaction template (0 if not recurring)
  */
 function monthlyAmount(transaction, now) {
+  if (transaction.repeat_until && new Date(transaction.repeat_until) <= now) return 0;
   if (transaction.repeat_monthly === 1) return transaction.amount;
   if (transaction.repeat_weekly === 1) {
     const weekday = new Date(transaction.date).getDay();

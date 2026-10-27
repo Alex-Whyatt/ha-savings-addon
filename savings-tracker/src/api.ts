@@ -13,6 +13,8 @@ import {
   BudgetAllocation,
   BudgetStream,
   CreateBudgetStream,
+  Holding,
+  InvestmentSummary,
 } from "./types";
 
 // Use relative URL for production (HA ingress), absolute URL only for local dev
@@ -464,6 +466,50 @@ export const deleteBudgetStream = async (id: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error("Error deleting budget stream:", error);
+    return false;
+  }
+};
+
+// Funds and growth for every account in the household
+export const fetchInvestments = async (): Promise<InvestmentSummary[]> => {
+  try {
+    return await apiRequest<InvestmentSummary[]>("/investments");
+  } catch (error) {
+    console.error("Error fetching investments:", error);
+    return [];
+  }
+};
+
+// Replace the funds held in an account
+export const saveHoldings = async (
+  potId: string,
+  holdings: Holding[]
+): Promise<boolean> => {
+  try {
+    await apiRequest(`/pots/${potId}/holdings`, {
+      method: "PUT",
+      body: JSON.stringify({ holdings }),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error saving holdings:", error);
+    return false;
+  }
+};
+
+// Record what an account is worth now
+export const recordValuation = async (
+  potId: string,
+  value: number
+): Promise<boolean> => {
+  try {
+    await apiRequest(`/pots/${potId}/valuations`, {
+      method: "POST",
+      body: JSON.stringify({ value }),
+    });
+    return true;
+  } catch (error) {
+    console.error("Error recording valuation:", error);
     return false;
   }
 };
