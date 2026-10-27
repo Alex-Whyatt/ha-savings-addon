@@ -4,7 +4,8 @@ const { runQuery, getRow, getAllRows } = require('./database');
 const { processRecurringTransactions, runProcessingCycle } = require('./scheduler');
 const { testNotification, getNotificationConfig } = require('./notifications');
 const { toDayKey, isRepeatActiveOn } = require('./recurrence');
-const { blendedReturn, valuationSummary } = require('./investments');
+const { blendedReturn, valuationSummary, effectiveReturns } = require('./investments');
+const { refreshPrices, applyPricesToPot, resetBaselines, runPriceUpdate } = require('./fundPrices');
 
 const router = express.Router();
 
@@ -1340,28 +1341,47 @@ router.get('/scheduler/history', requireAuth, async (req, res) => {
 
 // Investment Routes (funds held and recorded values)
 
-const formatHolding = (h) => ({
-  id: h.id,
-  potId: h.pot_id,
-  name: h.name,
-  identifier: h.identifier,
-  allocation: h.allocation,
-  expectedReturn: h.expected_return
-});
+const formatHolding = (h, prices = new Map()) => {
+  const price = h.identifier ? prices.get(h.identifier) : null;
+  return {
+    id: h.id,
+    potId: h.pot_id,
+    name: h.name,
+    identifier: h.identifier,
+    allocation: h.allocation,
+    expectedReturn: h.expected_return,
+    units: h.units,
+    price: price ? {
+      symbol: price.symbol,
+      price: price.price,
+      priceAt: price.price_at,
+      change1m: price.change_1m,
+      change1y: price.change_1y,
+      averageReturn: price.average_return,
+      historyYears: price.history_years,
+      error: price.error,
+      fetchedAt: price.fetched_at
+    } : null
+  };
+};
+
+const fundPricesEnabled = () => process.env.FUND_PRICES_ENABLED !== 'false';
 
 // Funds and growth for every account in the household
 router.get('/investments', requireAuth, async (req, res) => {
   try {
-    const [pots, holdings, valuations] = await Promise.all([
+    const [pots, holdings, valuations, priceRows] = await Promise.all([
       getAllRows('SELECT * FROM savings_pots'),
       getAllRows('SELECT * FROM pot_holdings ORDER BY sort_order ASC, created_at ASC'),
-      getAllRows('SELECT * FROM pot_valuations ORDER BY date ASC')
+      getAllRows('SELECT * FROM pot_valuations ORDER BY date ASC'),
+      getAllRows('SELECT * FROM fund_prices')
     ]);
+    const prices = new Map(priceRows.map(p => [p.identifier, p]));
 
     res.json(pots.map(pot => ({
       potId: pot.id,
-      holdings: holdings.filter(h => h.pot_id === pot.id).map(formatHolding),
-      expectedReturn: blendedReturn(holdings.filter(h => h.pot_id === pot.id)),
+      holdings: holdings.filter(h => h.pot_id === pot.id).map(h => formatHolding(h, prices)),
+      expectedReturn: blendedReturn(effectiveReturns(holdings.filter(h => h.pot_id === pot.id), prices)),
       ...valuationSummary(pot, valuations.filter(v => v.pot_id === pot.id))
     })));
   } catch (error) {
@@ -1396,25 +1416,33 @@ router.put('/pots/:id/holdings', requireAuth, async (req, res) => {
         identifier: typeof h.identifier === 'string' && h.identifier.trim() ? h.identifier.trim().toUpperCase() : null,
         allocation: toNumber(h.allocation),
         expected_return: toNumber(h.expectedReturn),
+        units: toNumber(h.units),
         sort_order: index
       }));
+
+    // Keep each fund's last used price so its price tracking carries on
+    const previous = await getAllRows('SELECT identifier, last_price_used FROM pot_holdings WHERE pot_id = ?', [id]);
+    const lastPrices = new Map(previous.filter(p => p.identifier).map(p => [p.identifier, p.last_price_used]));
 
     const now = new Date().toISOString();
     await runQuery('DELETE FROM pot_holdings WHERE pot_id = ?', [id]);
     for (const h of cleaned) {
       await runQuery(
-        'INSERT INTO pot_holdings (id, pot_id, name, identifier, allocation, expected_return, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [h.id, h.pot_id, h.name, h.identifier, h.allocation, h.expected_return, h.sort_order, now, now]
+        'INSERT INTO pot_holdings (id, pot_id, name, identifier, allocation, expected_return, units, last_price_used, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [h.id, h.pot_id, h.name, h.identifier, h.allocation, h.expected_return, h.units, lastPrices.get(h.identifier) ?? null, h.sort_order, now, now]
       );
     }
 
-    // Projections use the account's rate, so keep it in step with the funds
-    const expectedReturn = blendedReturn(cleaned);
-    if (expectedReturn !== null) {
-      await runQuery('UPDATE savings_pots SET interest_rate = ?, updated_at = ? WHERE id = ?', [expectedReturn, now, id]);
+    // Look up any new funds, then value the account from units held (when
+    // given for every fund) and keep its expected return in step with the funds
+    const identifiers = cleaned.map(h => h.identifier).filter(Boolean);
+    if (fundPricesEnabled() && identifiers.length > 0) {
+      await refreshPrices(identifiers);
     }
+    await applyPricesToPot(id, { fromUnits: true });
 
-    res.json({ potId: id, holdings: cleaned.map(formatHolding), expectedReturn });
+    const updatedPot = await getRow('SELECT interest_rate FROM savings_pots WHERE id = ?', [id]);
+    res.json({ potId: id, expectedReturn: updatedPot.interest_rate });
   } catch (error) {
     console.error('Error saving holdings:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -1439,15 +1467,31 @@ router.post('/pots/:id/valuations', requireAuth, async (req, res) => {
 
     const now = new Date().toISOString();
     await runQuery(
-      'INSERT INTO pot_valuations (id, pot_id, user_id, value, previous_value, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      `INSERT INTO pot_valuations (id, pot_id, user_id, value, previous_value, date, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'manual')`,
       [uuidv4(), id, userId, value, pot.current_total, now, now]
     );
     await runQuery('UPDATE savings_pots SET current_total = ?, updated_at = ? WHERE id = ?', [value, now, id]);
+    // Fund prices move the account on from this value
+    await resetBaselines(id);
 
     const valuations = await getAllRows('SELECT * FROM pot_valuations WHERE pot_id = ?', [id]);
     res.status(201).json({ potId: id, ...valuationSummary({ ...pot, current_total: value }, valuations) });
   } catch (error) {
     console.error('Error recording valuation:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Look up fund prices now rather than waiting for the next scheduled update
+router.post('/investments/refresh', requireAuth, async (req, res) => {
+  try {
+    if (!fundPricesEnabled()) {
+      return res.status(400).json({ error: 'Fund price lookups are turned off' });
+    }
+    await runPriceUpdate();
+    res.json({ message: 'Prices updated' });
+  } catch (error) {
+    console.error('Error refreshing prices:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -33,6 +33,7 @@ options:
     services: []
     default_service: ""
   sensors: true
+  fund_prices: true
 
 schema:
   users:
@@ -48,3 +49,4 @@ schema:
         service: str
     default_service: str?
   sensors: bool?
+  fund_prices: bool?

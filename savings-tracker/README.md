@@ -189,7 +189,9 @@ Your main overview showing:
 
 ### Investments (S&S ISA, Moneybox and similar)
 - **Update value**: tap an account's balance (or ⋮ → Update value) and type in what it's worth today. The change is recorded as growth, not money paid in, so the card shows e.g. "£10,500 paid in · +£740 (+7.0%) since Oct 2026".
-- **Funds held**: ⋮ → Add funds held lets you list each fund with its ISIN or ticker, its share of the account and the return you expect. Projections then use the blended rate, so you no longer have to keep adjusting the account's growth rate by hand.
+- **Funds held**: ⋮ → Add funds held lets you list each fund with its ISIN or ticker, its share of the account and (optionally) the return you expect. Projections use the blended rate, so you no longer have to keep adjusting the account's growth rate by hand.
+- **Fund prices**: with an ISIN or ticker, the add-on looks up each fund's price twice a day and moves the account's value with the market (recorded as growth). Each fund shows its latest price, 1-month and 1-year change and its average yearly return over up to 5 years; leave "Expected a year" blank to use that average. Add **units held** for every fund to set the account's value to units × price when you save.
+- Prices come from Yahoo Finance's public data, which covers most UK funds and ETFs but isn't an official feed. If a lookup fails the last good price is kept, and you can always type in the real value. To turn lookups off, add `fund_prices: false` to the add-on configuration.
 - Your partner can see your funds and growth but can't change them.
 
 ## 📡 API Endpoints

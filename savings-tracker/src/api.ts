@@ -513,3 +513,14 @@ export const recordValuation = async (
     return false;
   }
 };
+
+// Look up fund prices now
+export const refreshFundPrices = async (): Promise<boolean> => {
+  try {
+    await apiRequest("/investments/refresh", { method: "POST" });
+    return true;
+  } catch (error) {
+    console.error("Error refreshing fund prices:", error);
+    return false;
+  }
+};
