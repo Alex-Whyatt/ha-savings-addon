@@ -10,7 +10,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
     console.error('Error opening database:', err.message);
   } else {
     console.log('Connected to SQLite database.');
-    initializeDatabase();
+    // Create tables in order so migrations only run once they all exist
+    db.serialize(initializeDatabase);
   }
 });
 
@@ -53,6 +54,7 @@ function initializeDatabase() {
       description TEXT,
       repeat_monthly INTEGER DEFAULT 0,
       repeat_weekly INTEGER DEFAULT 0,
+      repeat_until TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (pot_id) REFERENCES savings_pots (id) ON DELETE CASCADE
@@ -153,6 +155,15 @@ function runMigrations() {
       console.error('Migration error:', err.message);
     } else if (!err) {
       console.log('Migration: Added repeat_weekly column');
+    }
+  });
+
+  // Add repeat_until column so a recurring transaction can stop before a given date
+  db.run(`ALTER TABLE transactions ADD COLUMN repeat_until TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('Migration error:', err.message);
+    } else if (!err) {
+      console.log('Migration: Added repeat_until column');
     }
   });
 

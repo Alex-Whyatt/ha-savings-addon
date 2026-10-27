@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SavingsData, Transaction, User } from '../types';
-import { addTransaction, deleteTransaction } from '../storage';
-import { getProjectedRecurringTransactions } from '../projections';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, isBefore, startOfDay } from 'date-fns';
+import { addTransaction, deleteTransaction, splitRecurringTransaction, stopRecurringTransaction } from '../storage';
+import { getProjectedRecurringTransactions, getRepeatDates, normalizeToNoon } from '../projections';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, addYears, subMonths, getDay, isBefore, startOfDay } from 'date-fns';
 import {
   Card,
   CardContent,
@@ -18,6 +18,7 @@ import {
   IconButton,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   ListItemSecondaryAction,
   Divider,
@@ -42,6 +43,17 @@ interface CalendarProps {
 type RecurrenceType = 'none' | 'weekly' | 'monthly';
 type DialogMode = 'view' | 'add' | 'edit';
 
+// Recurring payments the user can change open the edit form when tapped
+const EditableRow: React.FC<{ editable: boolean; label: string; onEdit: () => void; hasAction?: boolean; children: React.ReactNode }> = ({ editable, label, onEdit, hasAction, children }) =>
+  editable ? (
+    <ListItemButton onClick={onEdit} aria-label={label} sx={{ borderRadius: 1, py: 1, pr: hasAction ? 7 : 2 }}>
+      {children}
+      <Edit fontSize="small" sx={{ color: 'text.secondary', ml: 1 }} />
+    </ListItemButton>
+  ) : (
+    <>{children}</>
+  );
+
 // Generate a consistent color for a user based on their index
 const getUserColor = (_userId: string, index: number): string => {
   const colors = seriesColors;
@@ -60,6 +72,9 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+  // Edits to a recurring payment apply from this occurrence onwards
+  const [editFromDate, setEditFromDate] = useState<Date | null>(null);
+  const [stopConfirmOpen, setStopConfirmOpen] = useState(false);
   // Track which users' data to display (current user always included)
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set([currentUser.id]));
   const [formData, setFormData] = useState({
@@ -132,6 +147,30 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
     return [...actualTransactions, ...projectedForDate];
   };
 
+  // The recurring transaction an item belongs to: itself, or the one a projected occurrence repeats
+  const getSeries = (transaction: Transaction): Transaction | undefined =>
+    transaction.seriesId
+      ? data.transactions.find(t => t.id === transaction.seriesId)
+      : transaction;
+
+  // Changes apply from the tapped occurrence, or from the next one still to come
+  // when it's already happened. Null when the payment has no occurrences left.
+  const getChangeFromDate = (series: Transaction, occurrenceDate: Date): Date | null => {
+    const today = startOfDay(new Date());
+    const occurrence = normalizeToNoon(occurrenceDate);
+    const from = isBefore(occurrence, today) ? normalizeToNoon(today) : occurrence;
+    if (isSameDay(from, series.date)) return normalizeToNoon(series.date);
+    return getRepeatDates(series, from, addYears(from, 1))[0]?.date ?? null;
+  };
+
+  const canEditRecurring = (transaction: Transaction): boolean => {
+    const series = getSeries(transaction);
+    return !!series &&
+      series.userId === currentUser.id &&
+      !!(series.repeatMonthly || series.repeatWeekly) &&
+      getChangeFromDate(series, transaction.date) !== null;
+  };
+
   const getPotName = (potId: string): string => {
     const pot = combinedData.pots.find(p => p.id === potId);
     return pot?.name || 'Unknown Account';
@@ -156,6 +195,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
   const handleBackToView = () => {
     setDialogMode('view');
     setTransactionToEdit(null);
+    setEditFromDate(null);
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -190,45 +230,76 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
     await deleteTransaction(transactionToDelete.id);
     setDeleteConfirmOpen(false);
     setTransactionToDelete(null);
+    if (dialogMode === 'edit') handleBackToView();
     onDataChange();
   };
 
   const handleEditClick = (transaction: Transaction) => {
-    setTransactionToEdit(transaction);
+    const series = getSeries(transaction);
+    const fromDate = series && getChangeFromDate(series, transaction.date);
+    if (!series || !fromDate) return;
+
+    setTransactionToEdit(series);
+    setEditFromDate(fromDate);
     // Determine recurrence type
     let recurrence: RecurrenceType = 'none';
-    if (transaction.repeatWeekly) recurrence = 'weekly';
-    else if (transaction.repeatMonthly) recurrence = 'monthly';
+    if (series.repeatWeekly) recurrence = 'weekly';
+    else if (series.repeatMonthly) recurrence = 'monthly';
     
     setFormData({
-      potId: transaction.potId,
-      amount: transaction.amount.toString(),
-      description: transaction.description || '',
+      potId: series.potId,
+      amount: series.amount.toString(),
+      description: series.description || '',
       recurrence
     });
     setDialogMode('edit');
   };
 
+  // Editing from the first occurrence changes the whole payment
+  const isEditingFromStart = !!(transactionToEdit && editFromDate && isSameDay(editFromDate, transactionToEdit.date));
+
   const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!transactionToEdit) return;
+    if (!transactionToEdit || !editFromDate) return;
 
     const amount = parseFloat(formData.amount);
     if (!formData.potId || isNaN(amount) || amount <= 0) {
       return;
     }
 
-    await updateTransaction(transactionToEdit.id, {
+    const changes = {
       potId: formData.potId,
       amount,
-      description: formData.description || undefined,
       repeatMonthly: formData.recurrence === 'monthly',
       repeatWeekly: formData.recurrence === 'weekly'
-    });
+    };
+    if (isEditingFromStart) {
+      await updateTransaction(transactionToEdit.id, { ...changes, description: formData.description || undefined });
+    } else {
+      await splitRecurringTransaction(transactionToEdit.id, editFromDate, { ...changes, description: formData.description });
+    }
 
-    setDialogMode('view');
-    setTransactionToEdit(null);
+    handleBackToView();
+    onDataChange();
+  };
+
+  const handleStopClick = () => {
+    if (!transactionToEdit) return;
+    if (isEditingFromStart) {
+      // Stopping from the first occurrence removes the whole payment
+      handleDeleteClick(transactionToEdit);
+    } else {
+      setStopConfirmOpen(true);
+    }
+  };
+
+  const handleConfirmStop = async () => {
+    if (!transactionToEdit || !editFromDate) return;
+
+    await stopRecurringTransaction(transactionToEdit.id, editFromDate);
+    setStopConfirmOpen(false);
+    handleBackToView();
     onDataChange();
   };
 
@@ -237,6 +308,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
     setSelectedDate(null);
     setDialogMode('view');
     setTransactionToEdit(null);
+    setEditFromDate(null);
   };
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -555,7 +627,7 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
           {dialogMode === 'view' ? (
             selectedDate ? format(selectedDate, 'EEEE, MMMM do, yyyy') : ''
           ) : dialogMode === 'edit' ? (
-            'Edit Recurring Transaction'
+            'Edit recurring payment'
           ) : (
             `Add Transaction - ${selectedDate ? format(selectedDate, 'PPP') : ''}`
           )}
@@ -579,10 +651,13 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                       <List dense>
                         {actualTransactionsForDialog.map((transaction) => {
                           const isOwnTransaction = transaction.userId === currentUser.id;
+                          const isProjected = transaction.id.startsWith('projected-');
+                          const editable = canEditRecurring(transaction);
                           const transactionColor = userColorMap.get(transaction.userId) || 'text.secondary';
                           return (
                             <ListItem
                               key={transaction.id}
+                              disablePadding={editable}
                               sx={{
                                 bgcolor: 'action.hover',
                                 borderRadius: 1,
@@ -591,6 +666,12 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                                 opacity: isOwnTransaction ? 1 : 0.85
                               }}
                             >
+                              <EditableRow
+                                editable={editable}
+                                label={`Edit £${transaction.amount.toFixed(2)} ${transaction.repeatWeekly ? 'weekly' : 'monthly'} payment`}
+                                onEdit={() => handleEditClick(transaction)}
+                                hasAction={isOwnTransaction && !isProjected}
+                              >
                               <ListItemText
                                 primary={
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -630,24 +711,14 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                                   </>
                                 }
                               />
-                              {isOwnTransaction && (
+                              </EditableRow>
+                              {isOwnTransaction && !isProjected && (
                                 <ListItemSecondaryAction>
-                                  {(transaction.repeatWeekly || transaction.repeatMonthly) && (
-                                    <IconButton
-                                      edge="end"
-                                      onClick={() => handleEditClick(transaction)}
-                                      color="primary"
-                                      size="small"
-                                      title="Edit recurring transaction"
-                                    >
-                                      <Edit />
-                                    </IconButton>
-                                  )}
                                   <IconButton
                                     edge="end"
                                     onClick={() => handleDeleteClick(transaction)}
                                     color="error"
-                                    size="small"
+                                    aria-label={`Delete £${transaction.amount.toFixed(2)} payment`}
                                   >
                                     <Delete />
                                   </IconButton>
@@ -670,17 +741,23 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                       <List dense>
                         {projectedTransactionsForDialog.map((transaction) => {
                           const transactionColor = userColorMap.get(transaction.userId) || 'text.secondary';
+                          const editable = canEditRecurring(transaction);
                           return (
                             <ListItem
                               key={transaction.id}
+                              disablePadding={editable}
                               sx={{
                                 bgcolor: 'action.hover',
                                 borderRadius: 1,
                                 mb: 1,
-                                opacity: 0.8,
                                 borderLeft: selectedUserIds.size > 1 ? `4px solid ${transactionColor}` : 'none'
                               }}
                             >
+                              <EditableRow
+                                editable={editable}
+                                label={`Edit £${transaction.amount.toFixed(2)} ${transaction.repeatWeekly ? 'weekly' : 'monthly'} payment from ${format(transaction.date, 'd MMMM')}`}
+                                onEdit={() => handleEditClick(transaction)}
+                              >
                               <ListItemText
                                 primary={
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -709,13 +786,16 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                                   </Typography>
                                 }
                               />
+                              </EditableRow>
                             </ListItem>
                           );
                         })}
                       </List>
-                      <Typography variant="caption" color="text.secondary">
-                        To remove projected transactions, delete the original recurring transaction
-                      </Typography>
+                      {projectedTransactionsForDialog.some(canEditRecurring) && (
+                        <Typography variant="caption" color="text.secondary">
+                          Tap a payment to change or stop it from this date onwards
+                        </Typography>
+                      )}
                     </>
                   )}
                 </>
@@ -735,17 +815,23 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
         ) : dialogMode === 'edit' ? (
           <form onSubmit={handleSubmitEdit}>
             <DialogContent>
-              {transactionToEdit && (transactionToEdit.repeatWeekly || transactionToEdit.repeatMonthly) && (
-                <Box sx={{ 
-                  mb: 2, 
-                  p: 1.5, 
-                  bgcolor: 'info.50', 
+              {transactionToEdit && editFromDate && (
+                <Box sx={{
+                  mb: 2,
+                  p: 1.5,
+                  bgcolor: 'action.hover',
                   borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'info.200'
+                  display: 'flex',
+                  gap: 1,
+                  alignItems: 'flex-start'
                 }}>
-                  <Typography variant="body2" color="info.main">
-                    ✏️ Changes will apply to <strong>all future occurrences</strong> of this {transactionToEdit.repeatWeekly ? 'weekly' : 'monthly'} payment.
+                  <Repeat fontSize="small" sx={{ color: 'primary.main', mt: 0.25 }} />
+                  <Typography variant="body2">
+                    {isEditingFromStart ? (
+                      <>Changes apply to <strong>every payment</strong>, starting {format(editFromDate, 'EEE d MMMM')}.</>
+                    ) : (
+                      <>Changes apply from <strong>{format(editFromDate, 'EEE d MMMM')}</strong> onwards. Earlier payments stay as they were.</>
+                    )}
                   </Typography>
                 </Box>
               )}
@@ -795,21 +881,24 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
                 label="Recurrence"
                 value={formData.recurrence}
                 onChange={(e) => setFormData({...formData, recurrence: e.target.value as RecurrenceType})}
-                helperText="Changing recurrence will affect future projections"
+                helperText={isEditingFromStart ? undefined : 'One-time makes this the last payment'}
               >
                 <MenuItem value="none">One-time (no repeat)</MenuItem>
                 <MenuItem value="weekly">
-                  Weekly (every {transactionToEdit ? format(transactionToEdit.date, 'EEEE') : 'week'})
+                  Weekly (every {editFromDate ? format(editFromDate, 'EEEE') : 'week'})
                 </MenuItem>
                 <MenuItem value="monthly">
-                  Monthly (on the {transactionToEdit ? format(transactionToEdit.date, 'do') : 'same date'})
+                  Monthly (on the {editFromDate ? format(editFromDate, 'do') : 'same date'})
                 </MenuItem>
               </TextField>
             </DialogContent>
             <DialogActions>
+              <Button onClick={handleStopClick} color="error" sx={{ mr: 'auto' }}>
+                {isEditingFromStart ? 'Delete' : 'Stop from here'}
+              </Button>
               <Button onClick={handleBackToView}>Cancel</Button>
               <Button type="submit" variant="contained" color="primary">
-                Save Changes
+                Save
               </Button>
             </DialogActions>
           </form>
@@ -879,6 +968,24 @@ const Calendar: React.FC<CalendarProps> = ({ data, combinedData, onDataChange, c
             </DialogActions>
           </form>
         )}
+      </Dialog>
+
+      {/* Stop From Date Confirmation Dialog */}
+      <Dialog open={stopConfirmOpen} onClose={() => setStopConfirmOpen(false)}>
+        <DialogTitle>Stop this payment?</DialogTitle>
+        <DialogContent>
+          {transactionToEdit && editFromDate && (
+            <Typography>
+              The £{transactionToEdit.amount.toFixed(2)} {transactionToEdit.repeatWeekly ? 'weekly' : 'monthly'} payment won't repeat from {format(editFromDate, 'EEE d MMMM')}. Earlier payments stay as they were.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={handleConfirmStop} color="error" variant="contained">
+            Stop payment
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}

@@ -26,6 +26,8 @@ export interface Transaction {
   description?: string;
   repeatMonthly?: boolean;
   repeatWeekly?: boolean;
+  repeatUntil?: Date | null; // Recurring payments stop before this date
+  seriesId?: string; // On projected occurrences: the recurring transaction they come from
   createdAt: Date;
 }
 
@@ -36,7 +38,13 @@ export type CreateSavingsPot = Omit<
 >;
 export type CreateTransaction = Omit<
   Transaction,
-  "id" | "userId" | "createdAt"
+  "id" | "userId" | "createdAt" | "repeatUntil" | "seriesId"
+>;
+
+// Changes to a recurring transaction from one of its occurrences onwards
+export type RecurringChange = Pick<
+  Transaction,
+  "potId" | "amount" | "description" | "repeatMonthly" | "repeatWeekly"
 >;
 
 export interface ProjectionData {

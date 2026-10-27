@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { runQuery, getRow, getAllRows } = require('./database');
 const { processRecurringTransactions, runProcessingCycle } = require('./scheduler');
 const { testNotification, getNotificationConfig } = require('./notifications');
+const { toDayKey, isRepeatActiveOn } = require('./recurrence');
 
 const router = express.Router();
 
@@ -137,6 +138,7 @@ router.get('/admin/user/:userId/data', requireAuth, async (req, res) => {
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
       repeatWeekly: transaction.repeat_weekly === 1,
+      repeatUntil: transaction.repeat_until ? new Date(transaction.repeat_until) : null,
       createdAt: new Date(transaction.created_at)
     }));
 
@@ -181,6 +183,7 @@ router.get('/user/data', requireAuth, async (req, res) => {
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
       repeatWeekly: transaction.repeat_weekly === 1,
+      repeatUntil: transaction.repeat_until ? new Date(transaction.repeat_until) : null,
       createdAt: new Date(transaction.created_at)
     }));
 
@@ -223,6 +226,7 @@ router.get('/data', async (req, res) => {
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
       repeatWeekly: transaction.repeat_weekly === 1,
+      repeatUntil: transaction.repeat_until ? new Date(transaction.repeat_until) : null,
       createdAt: new Date(transaction.created_at)
     }));
 
@@ -384,6 +388,7 @@ router.get('/transactions', requireAuth, async (req, res) => {
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
       repeatWeekly: transaction.repeat_weekly === 1,
+      repeatUntil: transaction.repeat_until ? new Date(transaction.repeat_until) : null,
       createdAt: new Date(transaction.created_at)
     }));
     res.json(formattedTransactions);
@@ -434,6 +439,7 @@ router.post('/transactions', requireAuth, async (req, res) => {
       description: transaction.description,
       repeatMonthly: transaction.repeat_monthly === 1,
       repeatWeekly: transaction.repeat_weekly === 1,
+      repeatUntil: transaction.repeat_until ? new Date(transaction.repeat_until) : null,
       createdAt: new Date(transaction.created_at)
     };
 
@@ -487,12 +493,151 @@ router.put('/transactions/:id', requireAuth, async (req, res) => {
       description: updatedTransaction.description,
       repeatMonthly: updatedTransaction.repeat_monthly === 1,
       repeatWeekly: updatedTransaction.repeat_weekly === 1,
+      repeatUntil: updatedTransaction.repeat_until ? new Date(updatedTransaction.repeat_until) : null,
       createdAt: new Date(updatedTransaction.created_at)
     };
 
     res.json(formattedTransaction);
   } catch (error) {
     console.error('Error updating transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+const formatTransaction = (transaction) => ({
+  id: transaction.id,
+  userId: transaction.user_id,
+  potId: transaction.pot_id,
+  amount: transaction.amount,
+  date: new Date(transaction.date),
+  description: transaction.description,
+  repeatMonthly: transaction.repeat_monthly === 1,
+  repeatWeekly: transaction.repeat_weekly === 1,
+  repeatUntil: transaction.repeat_until ? new Date(transaction.repeat_until) : null,
+  createdAt: new Date(transaction.created_at)
+});
+
+// Load a recurring transaction owned by the user and check fromDate is one of
+// its later occurrences. Responds and returns null when it isn't.
+async function getRecurringForChange(req, res) {
+  const { id } = req.params;
+  const { fromDate } = req.body;
+  const transaction = await getRow('SELECT * FROM transactions WHERE id = ? AND user_id = ?', [id, req.user.id]);
+  if (!transaction) {
+    res.status(404).json({ error: 'Transaction not found' });
+    return null;
+  }
+  if (transaction.repeat_monthly !== 1 && transaction.repeat_weekly !== 1) {
+    res.status(400).json({ error: 'Transaction is not recurring' });
+    return null;
+  }
+  if (!fromDate || isNaN(new Date(fromDate).getTime())) {
+    res.status(400).json({ error: 'fromDate is required' });
+    return null;
+  }
+  // Payments that have already happened are left as they were
+  if (toDayKey(fromDate) < toDayKey(new Date())) {
+    res.status(400).json({ error: 'fromDate cannot be in the past' });
+    return null;
+  }
+  if (!isRepeatActiveOn(transaction, fromDate)) {
+    res.status(400).json({ error: 'fromDate must be a later occurrence of this payment' });
+    return null;
+  }
+  return transaction;
+}
+
+// Stop a recurring transaction before fromDate. Repeats the scheduler already
+// added on or after that date are removed so they aren't counted twice.
+async function endRecurringFrom(transaction, fromDate) {
+  const now = new Date().toISOString();
+  const fromKey = toDayKey(fromDate);
+
+  const processed = await getAllRows(
+    `SELECT pr.id, pr.new_transaction_id, t.amount, t.pot_id
+     FROM processed_recurring pr
+     JOIN transactions t ON pr.new_transaction_id = t.id
+     WHERE pr.original_transaction_id = ? AND pr.instance_date >= ?`,
+    [transaction.id, fromKey]
+  );
+  for (const instance of processed) {
+    await runQuery(
+      'UPDATE savings_pots SET current_total = current_total - ?, updated_at = ? WHERE id = ?',
+      [instance.amount, now, instance.pot_id]
+    );
+    await runQuery('DELETE FROM processed_recurring WHERE id = ?', [instance.id]);
+    await runQuery('DELETE FROM transactions WHERE id = ?', [instance.new_transaction_id]);
+  }
+
+  await runQuery('UPDATE transactions SET repeat_until = ? WHERE id = ?', [new Date(fromDate).toISOString(), transaction.id]);
+}
+
+// Change a recurring transaction from one occurrence onwards. Earlier
+// occurrences keep their values; a new recurring transaction starts on fromDate.
+router.post('/transactions/:id/split', requireAuth, async (req, res) => {
+  try {
+    const existing = await getRecurringForChange(req, res);
+    if (!existing) return;
+
+    const { fromDate, potId, amount, description, repeatMonthly, repeatWeekly } = req.body;
+    const userId = req.user.id;
+    const newPotId = potId || existing.pot_id;
+    const newAmount = amount !== undefined ? amount : existing.amount;
+
+    if (typeof newAmount !== 'number' || newAmount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+    const pot = await getRow('SELECT * FROM savings_pots WHERE id = ? AND user_id = ?', [newPotId, userId]);
+    if (!pot) {
+      return res.status(404).json({ error: 'Pot not found' });
+    }
+
+    await endRecurringFrom(existing, fromDate);
+
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const keepsRepeating = repeatMonthly || repeatWeekly;
+    await runQuery(
+      'INSERT INTO transactions (id, user_id, pot_id, amount, date, description, repeat_monthly, repeat_weekly, repeat_until, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        id,
+        userId,
+        newPotId,
+        newAmount,
+        new Date(fromDate).toISOString(),
+        description !== undefined ? (description || null) : existing.description,
+        repeatMonthly ? 1 : 0,
+        repeatWeekly ? 1 : 0,
+        keepsRepeating ? existing.repeat_until : null,
+        now
+      ]
+    );
+    await runQuery(
+      'UPDATE savings_pots SET current_total = current_total + ?, updated_at = ? WHERE id = ?',
+      [newAmount, now, newPotId]
+    );
+
+    const previous = await getRow('SELECT * FROM transactions WHERE id = ?', [existing.id]);
+    const created = await getRow('SELECT * FROM transactions WHERE id = ?', [id]);
+    res.status(201).json({ previous: formatTransaction(previous), transaction: formatTransaction(created) });
+  } catch (error) {
+    console.error('Error splitting transaction:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Stop a recurring transaction from one occurrence onwards
+router.post('/transactions/:id/stop', requireAuth, async (req, res) => {
+  try {
+    const existing = await getRecurringForChange(req, res);
+    if (!existing) return;
+
+    await endRecurringFrom(existing, req.body.fromDate);
+
+    const updated = await getRow('SELECT * FROM transactions WHERE id = ?', [existing.id]);
+    res.json(formatTransaction(updated));
+  } catch (error) {
+    console.error('Error stopping transaction:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1081,6 +1226,7 @@ router.get('/scheduler/status', requireAuth, async (req, res) => {
     // Count how many would be due today
     let dueTodayCount = 0;
     for (const tx of recurringTransactions) {
+      if (!isRepeatActiveOn(tx, today)) continue;
       const txDate = new Date(tx.date);
       if (tx.repeat_weekly === 1 && txDate.getDay() === todayDayOfWeek) {
         dueTodayCount++;
