@@ -1,4 +1,6 @@
-ARG BUILD_FROM
+# Supervisor passes BUILD_ARCH; newer versions no longer pass BUILD_FROM, so default it
+ARG BUILD_ARCH=aarch64
+ARG BUILD_FROM=ghcr.io/home-assistant/${BUILD_ARCH}-base:latest
 # --- Build Stage ---
 # Use a Node.js image to build the frontend only
 FROM node:18-alpine AS builder
